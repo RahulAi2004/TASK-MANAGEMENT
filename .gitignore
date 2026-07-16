@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Environment — contains GROQ_API_KEY and JWT secret, never commit
+.env
+*.env
+!.env.example
+
+# Local SQLite database (user data + password hashes)
+server/prisma/dev.db
+server/prisma/dev.db-journal
+
+# Build output
+dist/
+
+# Editor / OS
+.DS_Store
+Thumbs.db

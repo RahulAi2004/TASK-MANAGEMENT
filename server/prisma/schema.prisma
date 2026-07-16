@@ -1,0 +1,192 @@
+// Decoinks Task Management — Prisma schema.
+// Dev: SQLite (zero setup). Production: switch provider to "postgresql"
+// and set DATABASE_URL to your Postgres connection string — models are portable.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Department {
+  id    String @id @default(uuid())
+  code  String @unique // DESIGN, SALES, IT, QA, PROCUREMENT
+  name  String
+  users User[]
+  tasks Task[]
+}
+
+model User {
+  id           String  @id @default(uuid())
+  email        String  @unique
+  name         String
+  passwordHash String
+  role         String // ADMIN | SALES | DESIGNER | IT
+  title        String? // e.g. "Sales Agent"
+  color        String  @default("#2564CF")
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  assignedTasks Task[]              @relation("assignee")
+  createdTasks  Task[]              @relation("creator")
+  reviewTasks   Task[]              @relation("reviewer")
+  activities    Activity[]
+  comments      Comment[]
+  history       AssignmentHistory[] @relation("historyAssignee")
+  notifications Notification[]
+  createdAt     DateTime            @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id])
+  type      String   @default("Reminder") // Reminder | System
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id       String  @id @default(uuid())
+  taskNo   String  @unique // TASK-2026-00125
+  title    String
+  subtitle String?
+  description String?
+
+  entityType String // Artwork | Sales Order | Lead | System
+  entityId   String // AW-2026-000125
+  taskType   String // Background Removal | Bug Fix | ...
+  priority   String @default("Medium") // Urgent | High | Medium | Low
+  status     String @default("Pending") // see state machine
+
+  parentTaskId String?
+  parentTask   Task?   @relation("subtasks", fields: [parentTaskId], references: [id])
+  subtasks     Task[]  @relation("subtasks")
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  assignedUserId String?
+  assignedUser   User?   @relation("assignee", fields: [assignedUserId], references: [id])
+  createdById    String
+  createdBy      User    @relation("creator", fields: [createdById], references: [id])
+  reviewerId     String?
+  reviewer       User?   @relation("reviewer", fields: [reviewerId], references: [id])
+
+  requiresAcceptance Boolean @default(false)
+  requiresReview     Boolean @default(true)
+
+  startAfter        DateTime?
+  dueAt             DateTime?
+  estimatedMinutes  Int?
+  startedAt         DateTime?
+  submittedAt       DateTime?
+  completedAt       DateTime?
+  completionSummary String?
+  performedByType   String    @default("User") // User | AI
+  affectedSystem    String? // IT tickets
+  metadata          String? // JSON string (Json type unsupported on SQLite)
+  voiceNote         String? // base64 data URL of a recorded voice instruction
+  voiceTranscript   String? // speech-to-text transcript of the voice note
+
+  checklist  ChecklistItem[]
+  comments   Comment[]
+  activity   Activity[]
+  history    AssignmentHistory[]
+  aiRuns        AiRun[]
+  voiceNotes    TaskVoiceNote[]
+  notifications Notification[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model TaskVoiceNote {
+  id         String   @id @default(uuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id])
+  sequenceNo Int
+  audioData  String // base64 data URL
+  transcript String? // speech-to-text transcript
+  createdAt  DateTime @default(now())
+}
+
+model AssignmentHistory {
+  id             String    @id @default(uuid())
+  taskId         String
+  task           Task      @relation(fields: [taskId], references: [id])
+  previousUserId String?
+  assignedUserId String?
+  assignedUser   User?     @relation("historyAssignee", fields: [assignedUserId], references: [id])
+  assignedById   String?
+  reason         String?
+  assignedAt     DateTime  @default(now())
+  acceptedAt     DateTime?
+  releasedAt     DateTime?
+}
+
+model ChecklistItem {
+  id            String    @id @default(uuid())
+  taskId        String
+  task          Task      @relation(fields: [taskId], references: [id])
+  sequenceNo    Int
+  item          String
+  isRequired    Boolean   @default(true)
+  isCompleted   Boolean   @default(false)
+  completedById String?
+  completedAt   DateTime?
+  notes         String?
+}
+
+model Comment {
+  id              String    @id @default(uuid())
+  taskId          String
+  task            Task      @relation(fields: [taskId], references: [id])
+  commentType     String    @default("Comment") // Comment | Question | Answer | Feedback
+  commentText     String
+  audioData       String? // base64 data URL of a recorded voice note
+  audioTranscript String? // speech-to-text transcript of the voice note
+  parentCommentId String?
+  commentedById   String
+  commentedBy     User      @relation(fields: [commentedById], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+}
+
+model Activity {
+  id            String   @id @default(uuid())
+  taskId        String
+  task          Task     @relation(fields: [taskId], references: [id])
+  activityType  String // Created | Assigned | Started | Paused | Submitted | Approved | Rejected | Reopened | Cancelled | Commented
+  oldStatus     String?
+  newStatus     String?
+  performedById String?
+  performedBy   User?    @relation(fields: [performedById], references: [id])
+  notes         String?
+  metadata      String?
+  createdAt     DateTime @default(now())
+}
+
+model AiRun {
+  id              String    @id @default(uuid())
+  taskId          String
+  task            Task      @relation(fields: [taskId], references: [id])
+  agentType       String
+  modelName       String?
+  runStatus       String    @default("Queued") // Queued | Running | Completed | Failed
+  confidenceScore Float?
+  qualityScore    Float?
+  resultSummary   String?
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+}
