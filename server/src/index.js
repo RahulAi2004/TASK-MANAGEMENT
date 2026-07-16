@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import path from 'node:path'
+import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import express from 'express'
 import cors from 'cors'
 import { authRouter } from './routes/auth.js'
@@ -23,6 +26,16 @@ app.use('/api/notifications', notificationsRouter)
 
 // Overdue-task reminder sweep: on boot, then every 5 minutes
 startReminderSweep()
+
+// Production: serve the built frontend (../dist from `npm run build` at repo root)
+// so one port serves both the app and the API.
+const distDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../dist')
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir))
+  // SPA fallback for client-side routes (anything that is not /api/*)
+  app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(distDir, 'index.html')))
+  console.log('Serving frontend from', distDir)
+}
 
 // Central error handler
 app.use((err, _req, res, _next) => {
