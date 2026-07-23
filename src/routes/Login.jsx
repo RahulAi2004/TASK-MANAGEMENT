@@ -1,13 +1,6 @@
 import { useState } from 'react'
-import { CheckSquare, ShieldCheck, Palette, Briefcase, Wrench, Eye, EyeOff, LogIn } from 'lucide-react'
-import { useAuth, initials } from '../auth/AuthContext'
-
-const WORKSPACES = [
-  { email: 'bilal@decoinks.com', password: 'Admin@123', name: 'Bilal Ahmed', title: 'Manager', role: 'Admin', chip: 'linear-gradient(135deg,#2564CF,#3B7AD9)', Icon: ShieldCheck },
-  { email: 'areeba@decoinks.com', password: 'Sales@123', name: 'Areeba Khan', title: 'Sales Agent', role: 'Sales', chip: '#0F7B6C', Icon: Briefcase },
-  { email: 'hassan@decoinks.com', password: 'Design@123', name: 'Hassan Raza', title: 'Designer', role: 'Designer', chip: '#5B4BE6', Icon: Palette },
-  { email: 'usman@decoinks.com', password: 'It@123', name: 'Usman Tariq', title: 'IT Support', role: 'IT', chip: '#605E5C', Icon: Wrench },
-]
+import { CheckSquare, Eye, EyeOff, LogIn } from 'lucide-react'
+import { useAuth } from '../auth/AuthContext'
 
 export default function Login() {
   const { login } = useAuth()
@@ -28,12 +21,6 @@ export default function Login() {
       setError(err.message)
       setBusy(false)
     }
-  }
-
-  const quickFill = (ws) => {
-    setEmail(ws.email)
-    setPassword(ws.password)
-    setError(null)
   }
 
   return (
@@ -119,7 +106,7 @@ export default function Login() {
                 Password
                 <button
                   type="button"
-                  onClick={() => setError('Password resets are handled by your admin — contact Bilal Ahmed to reset.')}
+                  onClick={() => setError('Password resets are handled by your admin — contact them to reset.')}
                   className="text-accent hover:underline"
                   tabIndex={-1}
                 >
@@ -164,35 +151,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Quick demo access */}
-          <div className="mt-8">
-            <div className="mb-3 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">
-              <span className="h-px flex-1 bg-border" /> Quick demo access <span className="h-px flex-1 bg-border" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {WORKSPACES.map((ws) => (
-                <button
-                  key={ws.email}
-                  onClick={() => quickFill(ws)}
-                  className="focus-ring flex items-center gap-2 rounded-control border border-border bg-surface px-2.5 py-2 text-left transition-colors hover:border-accent-softborder hover:bg-subtle"
-                >
-                  <span
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white"
-                    style={{ background: ws.chip }}
-                  >
-                    {initials(ws.name)}
-                  </span>
-                  <span className="min-w-0 leading-tight">
-                    <span className="block truncate text-xs font-semibold text-ink">{ws.role}</span>
-                    <span className="block truncate text-[10px] text-ink-tertiary">{ws.title}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-3 text-center text-[11px] text-ink-tertiary">
-              Tap a role to fill credentials, then Sign in · access is enforced by the API
-            </p>
-          </div>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, Plus, FileStack, BarChart3, Users2,
-  Building2, UserCog, Settings, Upload, CheckSquare, ListChecks,
+  Building2, UserCog, Settings, CheckSquare, ListChecks,
   CheckCircle2, Ticket, Inbox,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -102,11 +102,6 @@ export default function Sidebar({ onCreate }) {
           >
             <Plus size={16} /> {user.role === 'SALES' ? 'New Design Task' : 'New Task'}
           </button>
-          {user.role === 'ADMIN' && (
-            <button className="focus-ring flex w-full items-center justify-center gap-2 rounded-control border border-border-strong bg-surface px-3 py-2.5 text-sm font-medium text-ink-secondary transition-colors hover:bg-border">
-              <Upload size={16} /> Import Tasks
-            </button>
-          )}
         </div>
       )}
     </aside>
