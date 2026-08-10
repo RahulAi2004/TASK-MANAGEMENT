@@ -42,8 +42,8 @@ export default function Login() {
             Every job, from artwork to shipment — one controlled workflow.
           </h1>
           <p className="mt-4 text-sm leading-relaxed text-white/80">
-            Managers assign and monitor. Sales delegate to designers. Designers execute.
-            IT handles tickets. Everyone sees exactly what their role allows — nothing more.
+            Assign, monitor and approve every job from one controlled dashboard —
+            with a full audit trail on every task. Manager access only.
           </p>
           <div className="mt-8 flex gap-6">
             {[
