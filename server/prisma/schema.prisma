@@ -12,11 +12,38 @@ datasource db {
 }
 
 model Department {
-  id    String @id @default(uuid())
-  code  String @unique // DESIGN, SALES, IT, QA, PROCUREMENT
-  name  String
-  users User[]
-  tasks Task[]
+  id        String         @id @default(uuid())
+  code      String         @unique // DESIGN, SALES, IT, QA, PROCUREMENT
+  name      String
+  users     User[]
+  tasks     Task[]
+  templates TaskTemplate[]
+}
+
+// Blueprint that produces tasks — used by the manual "Use template" action AND by the
+// automation engine (Phase 2) which creates a task from a template on a business event.
+model TaskTemplate {
+  id                 String      @id @default(uuid())
+  name               String
+  code               String      @unique // e.g. BACKGROUND_REMOVAL — referenced by automation
+  description        String?
+  taskType           String
+  entityType         String? // default related module: Artwork | Sales Order | Lead | System
+  priority           String      @default("Medium") // Urgent | High | Medium | Low
+  departmentId       String?
+  department         Department? @relation(fields: [departmentId], references: [id])
+  slaHours           Int? // due = createdAt + slaHours (null = no due date)
+  estimatedMinutes   Int?
+  requiresReview     Boolean     @default(true)
+  requiresAcceptance Boolean     @default(false)
+  aiFirstAttempt     Boolean     @default(false)
+  checklistJson      String? // JSON array of { item, isRequired }
+  triggerEvent       String? // business event that auto-creates this task (Phase 2), e.g. SALES_ORDER_CONFIRMED
+  isActive           Boolean     @default(true)
+  usageCount         Int         @default(0)
+  createdById        String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 }
 
 model User {

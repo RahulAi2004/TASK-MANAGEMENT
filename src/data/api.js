@@ -62,4 +62,10 @@ export const api = {
   createDepartment: (payload) => req('/admin/departments', { method: 'POST', body: JSON.stringify(payload) }),
   reports: () => req('/admin/reports'),
   activity: () => req('/admin/activity'),
+  // Task templates (blueprints that create tasks)
+  templates: (params = {}) => req('/templates?' + new URLSearchParams(params)),
+  createTemplate: (payload) => req('/templates', { method: 'POST', body: JSON.stringify(payload) }),
+  updateTemplate: (id, payload) => req(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteTemplate: (id) => req(`/templates/${id}`, { method: 'DELETE' }),
+  instantiateTemplate: (id, payload) => req(`/templates/${id}/instantiate`, { method: 'POST', body: JSON.stringify(payload) }),
 }
