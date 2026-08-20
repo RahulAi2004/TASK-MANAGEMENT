@@ -70,6 +70,22 @@ export default function TaskWorkView() {
     }
   }
 
+  // Assign / reassign — admin or the task creator picks the assignee.
+  const canAssign = isReviewer
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignUsers, setAssignUsers] = useState([])
+  const openAssign = async () => {
+    setActErr(null); setAssignOpen((o) => !o)
+    if (!assignUsers.length) {
+      try { const r = await api.assignableUsers(); setAssignUsers(r.users || r || []) } catch (e) { setActErr(e.message) }
+    }
+  }
+  const doAssign = async (userId) => {
+    setActErr(null)
+    try { await api.assignTask(t.id, { assignedUserId: userId }); setAssignOpen(false); reload() }
+    catch (e) { setActErr(e.message) }
+  }
+
   const toggleItem = async (item) => {
     try {
       await api.toggleChecklist(t.id, item.id, !item.isCompleted)
@@ -124,15 +140,39 @@ export default function TaskWorkView() {
               Due {new Date(t.dueAt).toLocaleString()}
             </span>
           )}
-          <span className="flex items-center gap-1.5 text-sm text-ink-secondary">
-            <span
-              className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold text-white"
-              style={{ background: t.assignedUser?.color }}
-            >
-              {initials(t.assignedUser?.name || '?')}
-            </span>
-            {t.assignedUser?.name}
-          </span>
+          <div className="relative flex items-center gap-1.5 text-sm text-ink-secondary">
+            {t.assignedUser ? (
+              <>
+                <span className="grid h-6 w-6 place-items-center rounded-full text-[10px] font-semibold text-white" style={{ background: t.assignedUser.color }}>
+                  {initials(t.assignedUser.name || '?')}
+                </span>
+                {t.assignedUser.name}
+              </>
+            ) : (
+              <span className="italic text-ink-tertiary">Unassigned</span>
+            )}
+            {canAssign && !['Completed', 'Cancelled'].includes(t.status) && (
+              <button onClick={openAssign} className="focus-ring ml-1 rounded-control border border-border-strong bg-surface px-2 py-1 text-xs font-medium text-ink-secondary hover:bg-subtle">
+                {t.assignedUser ? 'Reassign' : 'Assign'}
+              </button>
+            )}
+            {assignOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setAssignOpen(false)} />
+                <div className="absolute left-0 top-full z-30 mt-1 max-h-64 w-60 overflow-auto rounded-card border border-border bg-surface py-1 shadow-pop">
+                  {assignUsers.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-ink-tertiary">Loading…</div>
+                  ) : assignUsers.map((u) => (
+                    <button key={u.id} onClick={() => doAssign(u.id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-subtle">
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold text-white" style={{ background: u.color || '#605E5C' }}>{initials(u.name)}</span>
+                      <span className="min-w-0 flex-1 truncate">{u.name}<span className="text-ink-tertiary"> · {u.role}</span></span>
+                      {(u.openTasks ?? u.activeTasks ?? u.load) != null && <span className="shrink-0 text-xs text-ink-tertiary">{u.openTasks ?? u.activeTasks ?? u.load} open</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           {/* Delegation trail */}
           <span className="flex items-center gap-1 text-xs text-ink-tertiary">
             {t.history.map((h, i) => (

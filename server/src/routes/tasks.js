@@ -244,6 +244,43 @@ tasksRouter.post('/:id/transition', async (req, res) => {
   res.json({ task: updated })
 })
 
+// ── Assign / Reassign ────────────────────────────────────────────────────────
+const AssignSchema = z.object({
+  assignedUserId: z.string().min(1),
+  reason: z.string().max(500).optional(),
+})
+tasksRouter.post('/:id/assign', async (req, res) => {
+  const p = AssignSchema.safeParse(req.body)
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid payload' })
+  const task = await db.task.findFirst({ where: { id: req.params.id, deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  // Only an admin or the task creator (delegator) may (re)assign.
+  if (!(req.user.role === 'ADMIN' || task.createdById === req.user.id))
+    return res.status(403).json({ error: 'Only an admin or the task creator can assign this task' })
+  const roleFilter = assignableRoleFilter(req.user.role)
+  if (roleFilter === null) return res.status(403).json({ error: 'Your role cannot assign tasks' })
+  const assignee = await db.user.findFirst({ where: { id: p.data.assignedUserId, ...roleFilter } })
+  if (!assignee) return res.status(403).json({ error: 'You are not allowed to assign to this user' })
+
+  const prev = task.assignedUserId
+  // A never-started Pending task becomes Assigned; Waiting stays Waiting (the gate still holds,
+  // it activates to Assigned when prerequisites clear); active/finished statuses are unchanged.
+  const status = task.status === 'Pending' ? 'Assigned' : task.status
+  const updated = await db.task.update({
+    where: { id: task.id },
+    data: { assignedUserId: assignee.id, departmentId: assignee.departmentId ?? task.departmentId, status },
+    include: listInclude,
+  })
+  await db.assignmentHistory.create({
+    data: { taskId: task.id, previousUserId: prev, assignedUserId: assignee.id, assignedById: req.user.id, reason: p.data.reason || (prev ? 'Reassigned' : 'Assigned') },
+  })
+  await db.activity.create({
+    data: { taskId: task.id, activityType: prev ? 'Reassigned' : 'Assigned', oldStatus: task.status, newStatus: status, performedById: req.user.id, notes: `${prev ? 'Reassigned' : 'Assigned'} to ${assignee.name}${p.data.reason ? ' — ' + p.data.reason : ''}` },
+  })
+  db.notification.create({ data: { userId: assignee.id, taskId: task.id, type: 'System', message: `You were assigned ${task.taskNo}: ${task.title}` } }).catch(() => {})
+  res.json({ task: updated })
+})
+
 // ── Dependencies (task waits on prerequisite tasks) ──────────────────────────
 tasksRouter.post('/:id/dependencies', async (req, res) => {
   const dependsOnTaskId = String(req.body?.dependsOnTaskId || '')

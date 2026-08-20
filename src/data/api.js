@@ -35,6 +35,8 @@ export const api = {
   createTask: (payload) => req('/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   transition: (id, body) =>
     req(`/tasks/${id}/transition`, { method: 'POST', body: JSON.stringify(body) }),
+  assignTask: (id, body) =>
+    req(`/tasks/${id}/assign`, { method: 'POST', body: JSON.stringify(body) }),
   comment: (id, text, audioData, audioTranscript) =>
     req(`/tasks/${id}/comments`, {
       method: 'POST',
