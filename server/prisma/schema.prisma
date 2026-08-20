@@ -39,6 +39,7 @@ model TaskTemplate {
   aiFirstAttempt     Boolean     @default(false)
   checklistJson      String? // JSON array of { item, isRequired }
   triggerEvent       String? // business event that auto-creates this task (Phase 2), e.g. SALES_ORDER_CONFIRMED
+  dependsOnTaskType  String? // if set, a task from this template waits on the same-entity task of this type
   isActive           Boolean     @default(true)
   usageCount         Int         @default(0)
   createdById        String?
@@ -129,6 +130,8 @@ model Task {
   aiRuns        AiRun[]
   voiceNotes    TaskVoiceNote[]
   notifications Notification[]
+  dependencies TaskDependency[] @relation("dependent")    // tasks this one WAITS ON
+  dependents   TaskDependency[] @relation("prerequisite") // tasks WAITING ON this one
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -216,4 +219,17 @@ model AiRun {
   startedAt       DateTime?
   completedAt     DateTime?
   createdAt       DateTime  @default(now())
+}
+
+// A task (taskId) waits on a predecessor (dependsOnTaskId). The dependent stays in "Waiting"
+// until every predecessor is Completed, then it is activated (Waiting -> Assigned/Pending).
+model TaskDependency {
+  id              String   @id @default(uuid())
+  taskId          String
+  task            Task     @relation("dependent", fields: [taskId], references: [id])
+  dependsOnTaskId String
+  dependsOnTask   Task     @relation("prerequisite", fields: [dependsOnTaskId], references: [id])
+  createdAt       DateTime @default(now())
+
+  @@unique([taskId, dependsOnTaskId])
 }

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { db } from '../lib/db.js'
 import { authRequired, assignableRoleFilter } from '../lib/auth.js'
 import { canPerform } from '../lib/stateMachine.js'
+import { addDependency, removeDependency, onTaskCompleted } from '../lib/dependencies.js'
 
 export const tasksRouter = Router()
 tasksRouter.use(authRequired)
@@ -92,6 +93,8 @@ tasksRouter.get('/:id', async (req, res) => {
       history: { include: { assignedUser: userSelect }, orderBy: { assignedAt: 'asc' } },
       voiceNotes: { orderBy: { sequenceNo: 'asc' } },
       aiRuns: { orderBy: { createdAt: 'desc' } },
+      dependencies: { include: { dependsOnTask: { select: { id: true, taskNo: true, title: true, status: true } } } },
+      dependents: { include: { task: { select: { id: true, taskNo: true, title: true, status: true } } } },
     },
   })
   if (!task) return res.status(404).json({ error: 'Task not found' })
@@ -201,6 +204,12 @@ tasksRouter.post('/:id/transition', async (req, res) => {
   })
   if (!task) return res.status(404).json({ error: 'Task not found' })
 
+  // Dependency gate: a task waiting on unfinished prerequisites cannot be started/resumed.
+  if (['start', 'resume', 'accept'].includes(event) && task.status === 'Waiting') {
+    const open = await db.taskDependency.count({ where: { taskId: task.id, dependsOnTask: { status: { not: 'Completed' } } } })
+    if (open > 0) return res.status(422).json({ error: `Waiting on ${open} prerequisite task(s) — finish those first` })
+  }
+
   const check = canPerform(event, task, req.user)
   if (!check.ok) return res.status(422).json({ error: check.error })
   const t = check.transition
@@ -230,7 +239,29 @@ tasksRouter.post('/:id/transition', async (req, res) => {
       performedById: req.user.id, notes,
     },
   })
+  // Completing a task unblocks anything waiting on it.
+  if (t.to === 'Completed') await onTaskCompleted(task.id)
   res.json({ task: updated })
+})
+
+// ── Dependencies (task waits on prerequisite tasks) ──────────────────────────
+tasksRouter.post('/:id/dependencies', async (req, res) => {
+  const dependsOnTaskId = String(req.body?.dependsOnTaskId || '')
+  if (!dependsOnTaskId) return res.status(400).json({ error: 'dependsOnTaskId required' })
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const pred = await db.task.findFirst({ where: { id: dependsOnTaskId, deletedAt: null } })
+  if (!pred) return res.status(404).json({ error: 'Prerequisite task not found' })
+  try { const status = await addDependency(task.id, dependsOnTaskId, req.user.id); res.status(201).json({ ok: true, status }) }
+  catch (e) { res.status(422).json({ error: e.message }) }
+})
+
+tasksRouter.delete('/:id/dependencies/:depId', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const status = await removeDependency(req.params.depId, req.user.id)
+  if (status == null) return res.status(404).json({ error: 'Dependency not found' })
+  res.json({ ok: true, status })
 })
 
 // ── Comments ─────────────────────────────────────────────────────────────────

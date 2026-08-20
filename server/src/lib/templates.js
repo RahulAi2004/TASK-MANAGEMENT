@@ -1,6 +1,7 @@
 // Create a Task from a TaskTemplate. Shared by the manual "instantiate" endpoint and
 // (Phase 2) the business-event automation engine, so task-generation stays consistent.
 import { db } from './db.js'
+import { addDependency } from './dependencies.js'
 
 // Year-scoped human task number, e.g. TASK-2026-00128 (same scheme as manual create).
 export async function nextTaskNo() {
@@ -63,5 +64,15 @@ export async function createTaskFromTemplate(template, opts) {
     data: { taskId: task.id, activityType: 'Created', newStatus: task.status, performedById: createdById, notes: `Created from template "${template.name}"` },
   })
   await db.taskTemplate.update({ where: { id: template.id }, data: { usageCount: { increment: 1 } } })
+
+  // Auto-link a prerequisite: the same-entity task of the template's dependsOnTaskType.
+  // If that predecessor isn't Completed yet, addDependency() gates this task into "Waiting".
+  if (template.dependsOnTaskType) {
+    const pred = await db.task.findFirst({
+      where: { entityId, taskType: template.dependsOnTaskType, deletedAt: null, id: { not: task.id } },
+      orderBy: { createdAt: 'desc' }, select: { id: true },
+    })
+    if (pred) { await addDependency(task.id, pred.id, createdById); return db.task.findUnique({ where: { id: task.id } }) }
+  }
   return task
 }
