@@ -26,7 +26,8 @@ function useElapsed(startedAt, running) {
   return `${hh}:${mm}:${ss}`
 }
 
-const TABS = ['Details', 'Checklist', 'Comments', 'Activity']
+const TABS = ['Details', 'Checklist', 'Dependencies', 'Comments', 'Activity']
+const DEP_COLOR = { Completed: 'text-emerald-600', 'In Progress': 'text-accent', Submitted: 'text-amber-600', Waiting: 'text-amber-600', Pending: 'text-ink-tertiary', Assigned: 'text-ink-secondary', Cancelled: 'text-ink-tertiary', Rejected: 'text-danger' }
 
 export default function TaskWorkView() {
   const { id } = useParams()
@@ -399,6 +400,46 @@ export default function TaskWorkView() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {tab === 'Dependencies' && (
+            <div className="space-y-5 text-sm">
+              {t.status === 'Waiting' && (
+                <div className="rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                  ⏳ This task is <b>Waiting</b> — it can't start until its prerequisites are completed.
+                </div>
+              )}
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">Waits on (prerequisites)</div>
+                {(!t.dependencies || t.dependencies.length === 0) ? (
+                  <div className="text-ink-tertiary">No prerequisites — this task can start on its own.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {t.dependencies.map((d) => (
+                      <li key={d.id} className="flex items-center justify-between rounded-control border border-border bg-surface px-3 py-2">
+                        <span><span className="font-mono text-xs text-ink-tertiary">{d.dependsOnTask.taskNo}</span> · {d.dependsOnTask.title}</span>
+                        <span className={'text-xs font-semibold ' + (DEP_COLOR[d.dependsOnTask.status] || 'text-ink-secondary')}>{d.dependsOnTask.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">Blocks (tasks waiting on this)</div>
+                {(!t.dependents || t.dependents.length === 0) ? (
+                  <div className="text-ink-tertiary">Nothing is waiting on this task.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {t.dependents.map((d) => (
+                      <li key={d.id} className="flex items-center justify-between rounded-control border border-border bg-surface px-3 py-2">
+                        <span><span className="font-mono text-xs text-ink-tertiary">{d.task.taskNo}</span> · {d.task.title}</span>
+                        <span className={'text-xs font-semibold ' + (DEP_COLOR[d.task.status] || 'text-ink-secondary')}>{d.task.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
