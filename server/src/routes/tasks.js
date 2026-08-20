@@ -4,6 +4,7 @@ import { db } from '../lib/db.js'
 import { authRequired, assignableRoleFilter } from '../lib/auth.js'
 import { canPerform } from '../lib/stateMachine.js'
 import { addDependency, removeDependency, onTaskCompleted } from '../lib/dependencies.js'
+import { runArtworkAnalysis } from '../lib/ai.js'
 
 export const tasksRouter = Router()
 tasksRouter.use(authRequired)
@@ -95,6 +96,7 @@ tasksRouter.get('/:id', async (req, res) => {
       aiRuns: { orderBy: { createdAt: 'desc' } },
       dependencies: { include: { dependsOnTask: { select: { id: true, taskNo: true, title: true, status: true } } } },
       dependents: { include: { task: { select: { id: true, taskNo: true, title: true, status: true } } } },
+      files: { select: { id: true, fileName: true, fileType: true, kind: true, sizeBytes: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
     },
   })
   if (!task) return res.status(404).json({ error: 'Task not found' })
@@ -279,6 +281,47 @@ tasksRouter.post('/:id/assign', async (req, res) => {
   })
   db.notification.create({ data: { userId: assignee.id, taskId: task.id, type: 'System', message: `You were assigned ${task.taskNo}: ${task.title}` } }).catch(() => {})
   res.json({ task: updated })
+})
+
+// ── Files / attachments ──────────────────────────────────────────────────────
+const FileSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  fileType: z.string().max(120).optional(),
+  kind: z.enum(['attachment', 'result', 'reference']).default('attachment'),
+  dataUrl: z.string().regex(/^data:/, 'Must be a data URL').max(30_000_000),
+})
+tasksRouter.post('/:id/files', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const p = FileSchema.safeParse(req.body)
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid file' })
+  const sizeBytes = Math.floor((p.data.dataUrl.length * 3) / 4)
+  const f = await db.taskFile.create({ data: { taskId: task.id, fileName: p.data.fileName, fileType: p.data.fileType, kind: p.data.kind, dataUrl: p.data.dataUrl, sizeBytes, uploadedById: req.user.id } })
+  await db.activity.create({ data: { taskId: task.id, activityType: 'FileAdded', performedById: req.user.id, notes: `Attached ${p.data.fileName}` } })
+  const { dataUrl, ...meta } = f
+  res.status(201).json({ file: meta })
+})
+// Fetch one file's bytes (for download / preview) — kept out of the list to avoid bloat.
+tasksRouter.get('/:id/files/:fileId', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const f = await db.taskFile.findFirst({ where: { id: req.params.fileId, taskId: task.id } })
+  if (!f) return res.status(404).json({ error: 'File not found' })
+  res.json({ file: f })
+})
+tasksRouter.delete('/:id/files/:fileId', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  try { await db.taskFile.delete({ where: { id: req.params.fileId } }); res.json({ ok: true }) }
+  catch { res.status(404).json({ error: 'File not found' }) }
+})
+
+// ── AI first attempt (Artwork Analyzer) ──────────────────────────────────────
+tasksRouter.post('/:id/ai/analyze', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  try { const aiRun = await runArtworkAnalysis(task.id, req.user.id); res.status(201).json({ aiRun }) }
+  catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Dependencies (task waits on prerequisite tasks) ──────────────────────────

@@ -37,6 +37,10 @@ export const api = {
     req(`/tasks/${id}/transition`, { method: 'POST', body: JSON.stringify(body) }),
   assignTask: (id, body) =>
     req(`/tasks/${id}/assign`, { method: 'POST', body: JSON.stringify(body) }),
+  uploadFile: (id, body) => req(`/tasks/${id}/files`, { method: 'POST', body: JSON.stringify(body) }),
+  getFile: (id, fileId) => req(`/tasks/${id}/files/${fileId}`),
+  deleteFile: (id, fileId) => req(`/tasks/${id}/files/${fileId}`, { method: 'DELETE' }),
+  runAi: (id) => req(`/tasks/${id}/ai/analyze`, { method: 'POST' }),
   comment: (id, text, audioData, audioTranscript) =>
     req(`/tasks/${id}/comments`, {
       method: 'POST',

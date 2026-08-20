@@ -132,6 +132,7 @@ model Task {
   notifications Notification[]
   dependencies TaskDependency[] @relation("dependent")    // tasks this one WAITS ON
   dependents   TaskDependency[] @relation("prerequisite") // tasks WAITING ON this one
+  files        TaskFile[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -214,11 +215,29 @@ model AiRun {
   runStatus       String    @default("Queued") // Queued | Running | Completed | Failed
   confidenceScore Float?
   qualityScore    Float?
+  similarityScore Float?
+  inputImageUrl   String? // what the agent analyzed
+  metadata        String? // JSON: detailed findings (width, height, dpi, hasAlpha, issues…)
   resultSummary   String?
   errorMessage    String?
   startedAt       DateTime?
   completedAt     DateTime?
   createdAt       DateTime  @default(now())
+}
+
+// A file attached to a task — customer image, reference, or a produced result. Stored as a
+// base64 data URL (same as voice notes); the API caps size and streams it back on read.
+model TaskFile {
+  id           String   @id @default(uuid())
+  taskId       String
+  task         Task     @relation(fields: [taskId], references: [id])
+  fileName     String
+  fileType     String?
+  kind         String   @default("attachment") // attachment | result | reference
+  dataUrl      String // base64 data URL
+  sizeBytes    Int?
+  uploadedById String?
+  createdAt    DateTime @default(now())
 }
 
 // A task (taskId) waits on a predecessor (dependsOnTaskId). The dependent stays in "Waiting"

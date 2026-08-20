@@ -1,5 +1,5 @@
 // Shared working view — used by all roles; actions shown per state machine + role.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Play, Pause, Upload, CheckCircle2, XCircle, RotateCcw, Check, Send, Bot, Mic, BellRing,
@@ -26,7 +26,8 @@ function useElapsed(startedAt, running) {
   return `${hh}:${mm}:${ss}`
 }
 
-const TABS = ['Details', 'Checklist', 'Dependencies', 'Comments', 'Activity']
+const TABS = ['Details', 'Checklist', 'Dependencies', 'Files', 'Comments', 'Activity']
+const fmtSize = (b) => (b == null ? '' : b > 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB')
 const DEP_COLOR = { Completed: 'text-emerald-600', 'In Progress': 'text-accent', Submitted: 'text-amber-600', Waiting: 'text-amber-600', Pending: 'text-ink-tertiary', Assigned: 'text-ink-secondary', Cancelled: 'text-ink-tertiary', Rejected: 'text-danger' }
 
 export default function TaskWorkView() {
@@ -84,6 +85,32 @@ export default function TaskWorkView() {
     setActErr(null)
     try { await api.assignTask(t.id, { assignedUserId: userId }); setAssignOpen(false); reload() }
     catch (e) { setActErr(e.message) }
+  }
+
+  // Files + AI
+  const fileRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  const [runningAi, setRunningAi] = useState(false)
+  const doUpload = async (file) => {
+    if (!file) return
+    if (file.size > 25 * 1024 * 1024) { setActErr('File must be under 25 MB'); return }
+    setActErr(null); setUploading(true)
+    try {
+      const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file) })
+      await api.uploadFile(t.id, { fileName: file.name, fileType: file.type, dataUrl }); reload()
+    } catch (e) { setActErr(e.message) } finally { setUploading(false) }
+  }
+  const doDownload = async (f) => {
+    try { const r = await api.getFile(t.id, f.id); const a = document.createElement('a'); a.href = r.file.dataUrl; a.download = f.fileName; document.body.appendChild(a); a.click(); a.remove() }
+    catch (e) { setActErr(e.message) }
+  }
+  const doDeleteFile = async (f) => {
+    if (!window.confirm(`Delete ${f.fileName}?`)) return
+    try { await api.deleteFile(t.id, f.id); reload() } catch (e) { setActErr(e.message) }
+  }
+  const doRunAi = async () => {
+    setActErr(null); setRunningAi(true)
+    try { await api.runAi(t.id); reload() } catch (e) { setActErr(e.message) } finally { setRunningAi(false) }
   }
 
   const toggleItem = async (item) => {
@@ -368,6 +395,66 @@ export default function TaskWorkView() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {tab === 'Files' && (
+            <div className="space-y-5">
+              <div>
+                <input ref={fileRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; doUpload(f) }} accept="image/*,application/pdf,.ai,.psd,.eps,.zip" />
+                <button onClick={() => fileRef.current?.click()} disabled={uploading} className="focus-ring inline-flex items-center gap-2 rounded-control bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50">
+                  <Upload size={14} /> {uploading ? 'Uploading…' : 'Attach a file'}
+                </button>
+                <span className="ml-2 text-xs text-ink-tertiary">Image, PDF, AI, PSD… up to 25 MB</span>
+              </div>
+
+              <div className="rounded-card border border-border bg-subtle p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-ink"><Bot size={15} className="text-accent" /> AI Artwork Analysis</span>
+                  <button onClick={doRunAi} disabled={runningAi} className="focus-ring rounded-control bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent-softborder disabled:opacity-50">
+                    {runningAi ? 'Analyzing…' : 'Run AI on attached image'}
+                  </button>
+                </div>
+                {(!t.aiRuns || t.aiRuns.length === 0) ? (
+                  <p className="text-xs text-ink-tertiary">Attach an image, then run the analyzer — it checks resolution, transparency and DPI and scores the artwork.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {t.aiRuns.slice(0, 3).map((r) => {
+                      let m = {}; try { m = JSON.parse(r.metadata || '{}') } catch { m = {} }
+                      return (
+                        <li key={r.id} className="rounded-control border border-border bg-surface p-3 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-ink">{r.agentType} · {r.runStatus}</span>
+                            {r.qualityScore != null && <span className={'font-bold ' + (r.qualityScore >= 0.85 ? 'text-emerald-600' : r.qualityScore >= 0.6 ? 'text-amber-600' : 'text-danger')}>Quality {Math.round(r.qualityScore * 100)}%</span>}
+                          </div>
+                          {r.resultSummary && <p className="mt-1 text-ink-secondary">{r.resultSummary}</p>}
+                          {r.errorMessage && <p className="mt-1 text-danger">{r.errorMessage}</p>}
+                          {m.width && <p className="mt-1 text-ink-tertiary">{m.width}×{m.height}px · {m.hasAlpha ? 'transparent' : 'no transparency'}{m.dpi ? ' · ' + m.dpi + ' DPI' : ''}{m.printSizeAt300dpi ? ` · ~${m.printSizeAt300dpi.w_in}"×${m.printSizeAt300dpi.h_in}" @300dpi` : ''}</p>}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-tertiary">Attachments</div>
+                {(!t.files || t.files.length === 0) ? (
+                  <div className="text-sm text-ink-tertiary">No files yet.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {t.files.map((f) => (
+                      <li key={f.id} className="flex items-center justify-between rounded-control border border-border bg-surface px-3 py-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate">📎 {f.fileName} <span className="text-ink-tertiary">· {fmtSize(f.sizeBytes)}</span></span>
+                        <span className="flex shrink-0 items-center gap-3">
+                          <button onClick={() => doDownload(f)} className="text-xs font-semibold text-accent hover:underline">Download</button>
+                          <button onClick={() => doDeleteFile(f)} className="text-xs text-ink-tertiary hover:text-danger">Delete</button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           )}
 
           {tab === 'Comments' && (
