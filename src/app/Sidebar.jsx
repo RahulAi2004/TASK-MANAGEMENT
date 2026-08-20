@@ -10,7 +10,7 @@ import { useAuth } from '../auth/AuthContext'
 const NAV_BY_ROLE = {
   ADMIN: [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-    { to: '/all-tasks', label: 'All Tasks', icon: ClipboardList },
+    { to: '/all-tasks', label: 'Tasks', icon: ClipboardList },
     { to: '/workload', label: 'Team Workload', icon: Users2 },
     { to: '/templates', label: 'Task Templates', icon: FileStack },
     { to: '/reports', label: 'Reports', icon: BarChart3 },
@@ -20,14 +20,17 @@ const NAV_BY_ROLE = {
   ],
   SALES: [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/all-tasks', label: 'Tasks', icon: ClipboardList },
     { to: '/approvals', label: 'Approvals', icon: CheckCircle2 },
   ],
   DESIGNER: [
     { to: '/', label: 'My Queue', icon: ListChecks, end: true },
+    { to: '/all-tasks', label: 'Tasks', icon: ClipboardList },
     { to: '/submitted', label: 'Submitted', icon: Inbox },
   ],
   IT: [
     { to: '/', label: 'My Tickets', icon: Ticket, end: true },
+    { to: '/all-tasks', label: 'Tasks', icon: ClipboardList },
   ],
 }
 

@@ -44,13 +44,17 @@ tasksRouter.get('/stats', async (req, res) => {
 })
 
 // ── List ─────────────────────────────────────────────────────────────────────
-// scope: mine (assigned to me) | delegated (created by me, assigned to others) | all (admin)
+// scope: mine (assigned to me) | team (assigned to others, admin) | delegated (created by me, assigned to others) | all (admin)
 tasksRouter.get('/', async (req, res) => {
   const { scope = 'mine', status, q, priority } = req.query
   let where = { deletedAt: null }
 
   if (scope === 'all') {
     if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Only admin can view all tasks' })
+  } else if (scope === 'team') {
+    if (req.user.role !== 'ADMIN') return res.status(403).json({ error: 'Only admin can view team tasks' })
+    // Tasks handled by the team — i.e. assigned to someone other than me
+    where = { ...where, assignedUserId: { not: req.user.id } }
   } else if (scope === 'delegated') {
     where = { ...where, createdById: req.user.id, NOT: { assignedUserId: req.user.id } }
   } else {

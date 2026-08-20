@@ -62,10 +62,11 @@ function RoleRoutes() {
     <Routes>
       <Route path="/" element={home} />
       <Route path="/task/:id" element={<TaskWorkView />} />
+      {/* Tasks page — all roles; the page itself limits non-admins to My Tasks */}
+      <Route path="/all-tasks" element={<AllTasks />} />
 
       {user.role === 'ADMIN' && (
         <>
-          <Route path="/all-tasks" element={<AllTasks />} />
           <Route path="/workload" element={<Workload />} />
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/templates" element={<TaskTemplates />} />
