@@ -9,6 +9,7 @@ import { usersRouter } from './routes/users.js'
 import { tasksRouter } from './routes/tasks.js'
 import { adminRouter } from './routes/admin.js'
 import { templatesRouter } from './routes/templates.js'
+import { eventsRouter } from './routes/events.js'
 import { transcribeRouter } from './routes/transcribe.js'
 import { notificationsRouter, startReminderSweep } from './routes/notifications.js'
 
@@ -23,6 +24,7 @@ app.use('/api/users', usersRouter)
 app.use('/api/tasks', tasksRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/templates', templatesRouter)
+app.use('/api/events', eventsRouter)
 app.use('/api/transcribe', transcribeRouter)
 app.use('/api/notifications', notificationsRouter)
 
