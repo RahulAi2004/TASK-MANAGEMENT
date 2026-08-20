@@ -14,6 +14,7 @@ const Schema = z.object({
   code: z.string().max(60).optional(),
   description: z.string().max(2000).optional(),
   taskType: z.string().min(1).max(80),
+  actionType: z.enum(['A', 'H', 'G']).default('H'),  // A = Automatic/AI · H = Human · G = Validation Gate
   entityType: z.string().max(60).optional(),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']).default('Medium'),
   departmentId: z.string().optional().nullable(),
@@ -46,7 +47,7 @@ templatesRouter.post('/', requireRole('ADMIN'), async (req, res) => {
   if (await db.taskTemplate.findUnique({ where: { code } })) return res.status(409).json({ error: 'A template with that code already exists' })
   const template = await db.taskTemplate.create({
     data: {
-      name: d.name, code, description: d.description, taskType: d.taskType, entityType: d.entityType,
+      name: d.name, code, description: d.description, taskType: d.taskType, actionType: d.actionType, entityType: d.entityType,
       priority: d.priority, departmentId: d.departmentId || null, slaHours: d.slaHours ?? null,
       estimatedMinutes: d.estimatedMinutes ?? null, requiresReview: d.requiresReview,
       requiresAcceptance: d.requiresAcceptance, aiFirstAttempt: d.aiFirstAttempt,
@@ -65,7 +66,7 @@ templatesRouter.patch('/:id', requireRole('ADMIN'), async (req, res) => {
   if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid payload' })
   const d = p.data
   const data = {}
-  for (const k of ['name', 'description', 'taskType', 'entityType', 'priority', 'departmentId', 'slaHours', 'estimatedMinutes', 'requiresReview', 'requiresAcceptance', 'aiFirstAttempt', 'triggerEvent', 'isActive']) {
+  for (const k of ['name', 'description', 'taskType', 'actionType', 'entityType', 'priority', 'departmentId', 'slaHours', 'estimatedMinutes', 'requiresReview', 'requiresAcceptance', 'aiFirstAttempt', 'triggerEvent', 'isActive']) {
     if (d[k] !== undefined) data[k] = k === 'departmentId' ? (d[k] || null) : d[k]
   }
   if (d.checklist !== undefined) data.checklistJson = JSON.stringify(d.checklist)

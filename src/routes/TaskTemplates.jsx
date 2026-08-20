@@ -15,9 +15,9 @@ const slaLabel = (h) => (h == null ? 'No SLA' : `${h}h`)
 const parseChecklist = (json) => { try { return JSON.parse(json || '[]') } catch { return [] } }
 
 function TemplateForm({ open, onClose, onSave, editing, departments, saving }) {
-  const blank = { name: '', taskType: '', entityType: 'Artwork', departmentId: '', priority: 'High', description: '', slaHours: 24, aiFirstAttempt: false, requiresReview: true, checklistText: '' }
+  const blank = { name: '', taskType: '', actionType: 'H', entityType: 'Artwork', departmentId: '', priority: 'High', description: '', slaHours: 24, aiFirstAttempt: false, requiresReview: true, checklistText: '' }
   const toForm = (t) => t ? {
-    name: t.name || '', taskType: t.taskType || '', entityType: t.entityType || 'Artwork',
+    name: t.name || '', taskType: t.taskType || '', actionType: t.actionType || 'H', entityType: t.entityType || 'Artwork',
     departmentId: t.departmentId || '', priority: t.priority || 'High', description: t.description || '',
     slaHours: t.slaHours ?? null, aiFirstAttempt: !!t.aiFirstAttempt, requiresReview: t.requiresReview !== false,
     checklistText: parseChecklist(t.checklistJson).map((c) => (typeof c === 'string' ? c : c.item)).join('\n'),
@@ -30,7 +30,7 @@ function TemplateForm({ open, onClose, onSave, editing, departments, saving }) {
   const submit = () => {
     const checklist = f.checklistText.split('\n').map((s) => s.trim()).filter(Boolean).map((item) => ({ item, isRequired: true }))
     onSave({
-      name: f.name.trim(), taskType: f.taskType.trim() || f.name.trim(), entityType: f.entityType,
+      name: f.name.trim(), taskType: f.taskType.trim() || f.name.trim(), actionType: f.actionType, entityType: f.entityType,
       departmentId: f.departmentId || null, priority: f.priority, description: f.description.trim() || undefined,
       slaHours: f.slaHours === '' ? null : (f.slaHours == null ? null : Number(f.slaHours)),
       aiFirstAttempt: f.aiFirstAttempt, requiresReview: f.requiresReview, checklist,
@@ -61,6 +61,14 @@ function TemplateForm({ open, onClose, onSave, editing, departments, saving }) {
             <select className={modalInput} value={f.entityType} onChange={set('entityType')}>{ENTITY_TYPES.map((e) => <option key={e}>{e}</option>)}</select>
           </label>
         </div>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-secondary">Work type <span className="text-ink-tertiary">(who performs it)</span></span>
+          <select className={modalInput} value={f.actionType} onChange={set('actionType')}>
+            <option value="H">H · Human task (employee queue)</option>
+            <option value="A">A · Automatic (AI / system)</option>
+            <option value="G">G · Validation gate (manager approval)</option>
+          </select>
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-ink-secondary">Department</span>

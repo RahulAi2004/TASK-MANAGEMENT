@@ -7,6 +7,13 @@ import { api } from '../data/api'
 import { useApi, useAuth } from '../auth/AuthContext'
 
 const STATUSES = ['All', 'Assigned', 'In Progress', 'Submitted', 'Completed', 'Overdue']
+// A/H/G work-type filter. A = Automatic/AI · H = Human task · G = Validation Gate (manager approval).
+const ACTION_TYPES = [
+  { key: '', label: 'All types' },
+  { key: 'A', label: 'A · AI / Auto' },
+  { key: 'H', label: 'H · Human' },
+  { key: 'G', label: 'G · Gate' },
+]
 const SCOPES = [
   { key: 'all', label: 'All Tasks' },
   { key: 'team', label: 'Team Tasks' },
@@ -18,13 +25,14 @@ export default function AllTasks() {
   const isAdmin = user.role === 'ADMIN'
   const [scope, setScope] = useState(isAdmin ? 'all' : 'mine')
   const [status, setStatus] = useState('All')
+  const [actionType, setActionType] = useState('')
   const [q, setQ] = useState('')
 
   // Non-admins are always locked to their own tasks.
   const effectiveScope = isAdmin ? scope : 'mine'
   const { data, loading, reload } = useApi(
-    () => api.tasks({ scope: effectiveScope, ...(status !== 'All' ? { status } : {}), ...(q ? { q } : {}) }),
-    [effectiveScope, status, q]
+    () => api.tasks({ scope: effectiveScope, ...(status !== 'All' ? { status } : {}), ...(actionType ? { actionType } : {}), ...(q ? { q } : {}) }),
+    [effectiveScope, status, actionType, q]
   )
 
   const subtitle = isAdmin
@@ -87,6 +95,26 @@ export default function AllTasks() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* A / H / G work-type filter */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-2.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">Type</span>
+          {ACTION_TYPES.map((a) => (
+            <button
+              key={a.key || 'all'}
+              onClick={() => setActionType(a.key)}
+              title={a.key === 'A' ? 'Automatic — AI / system performs it' : a.key === 'H' ? 'Human task — needs an employee' : a.key === 'G' ? 'Validation gate — manager approval' : 'All work types'}
+              className={
+                'focus-ring rounded-control px-3 py-1.5 text-sm ' +
+                (actionType === a.key
+                  ? 'bg-accent-soft font-semibold text-accent'
+                  : 'text-ink-secondary hover:bg-subtle')
+              }
+            >
+              {a.label}
+            </button>
+          ))}
         </div>
 
         {loading ? (

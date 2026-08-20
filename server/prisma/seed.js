@@ -35,24 +35,32 @@ async function main() {
 
   // Default task templates (idempotent — upsert by code; never overwrites admin edits).
   const deptByCode = Object.fromEntries((await db.department.findMany()).map((d) => [d.code, d.id]))
+  // actionType: A = Automatic/AI (system/AI performs it) · H = Human task (employee queue) · G = Validation Gate (manager/QA approval).
   const templates = [
-    { code: 'BACKGROUND_REMOVAL', name: 'Background Removal', dept: 'DESIGN', taskType: 'Background Removal', entityType: 'Artwork', priority: 'High', slaHours: 2, aiFirstAttempt: true, description: 'Remove background, clean edges, deliver a transparent PNG at 300 DPI.', checklist: [{ item: 'Transparency verified' }, { item: 'Clean edges' }, { item: 'No halos' }] },
-    { code: 'ARTWORK_EXTRACTION', name: 'Artwork Extraction', dept: 'DESIGN', taskType: 'Artwork Extraction', entityType: 'Artwork', priority: 'Medium', slaHours: 24, aiFirstAttempt: true, triggerEvent: 'ARTWORK_CREATED', description: 'Extract the vector/raster artwork from a customer-supplied file.', checklist: [{ item: 'Artwork isolated' }, { item: 'Resolution OK' }] },
-    { code: 'CUSTOMER_MOCKUP', name: 'Customer Mockup', dept: 'DESIGN', taskType: 'Mockup Creation', entityType: 'Artwork', priority: 'High', slaHours: 8, aiFirstAttempt: true, triggerEvent: 'MOCKUP_REQUESTED', description: 'Place approved artwork on garment templates for customer approval.', checklist: [{ item: 'Correct garment' }, { item: 'Correct placement' }, { item: 'Color accurate' }, { item: 'Customer-ready' }] },
-    { code: 'PRODUCTION_ARTWORK', name: 'Production Artwork', dept: 'DESIGN', taskType: 'Production Artwork', entityType: 'Sales Order', priority: 'High', slaHours: 24, triggerEvent: 'PAYMENT_RECEIVED', description: 'Prepare print-ready 300 DPI artwork for DTF/DTG production.', checklist: [{ item: '300 DPI' }, { item: 'Correct dimensions' }, { item: 'Whites/CMYK correct' }, { item: 'Transparent background' }, { item: 'File named correctly' }] },
-    { code: 'GANGSHEET_PREPARATION', name: 'Gangsheet Preparation', dept: 'DESIGN', taskType: 'Gangsheet Preparation', entityType: 'Sales Order', priority: 'High', slaHours: 8, triggerEvent: 'QA_APPROVED', dependsOnTaskType: 'Production Artwork', description: 'Nest the approved designs on a gangsheet for a DTF run.', checklist: [{ item: 'All artworks nested' }, { item: 'Sheet size correct' }, { item: 'No overlaps' }] },
-    { code: 'QA_REVIEW', name: 'QA Review', dept: 'QA', taskType: 'QA Review', entityType: 'Artwork', priority: 'High', slaHours: 2, triggerEvent: 'PRODUCTION_ARTWORK_SUBMITTED', description: 'Check resolution, transparency, halos and dimensions before approval.', checklist: [{ item: 'Resolution' }, { item: 'Transparency' }, { item: 'No halos' }, { item: 'Dimensions' }, { item: 'Color' }, { item: 'File format' }] },
-    { code: 'PURCHASE_ORDER_PREP', name: 'Purchase Order Prep', dept: 'SALES', taskType: 'Follow-up', entityType: 'Sales Order', priority: 'Medium', slaHours: 24, isActive: false, triggerEvent: 'GANGSHEET_QA_APPROVED', description: 'Draft the supplier purchase order from the approved order.', checklist: [{ item: 'Items verified' }, { item: 'Supplier selected' }] },
-    { code: 'FIX_BUG_TICKET', name: 'Fix / Bug Ticket', dept: 'IT', taskType: 'Bug Fix', entityType: 'System', priority: 'Medium', slaHours: 24, description: 'Internal IT ticket — bug fix, hardware or access request.', checklist: [{ item: 'Reproduced / verified' }] },
+    { code: 'BACKGROUND_REMOVAL', name: 'Background Removal', dept: 'DESIGN', taskType: 'Background Removal', actionType: 'A', entityType: 'Artwork', priority: 'High', slaHours: 2, aiFirstAttempt: true, description: 'Remove background, clean edges, deliver a transparent PNG at 300 DPI.', checklist: [{ item: 'Transparency verified' }, { item: 'Clean edges' }, { item: 'No halos' }] },
+    { code: 'ARTWORK_EXTRACTION', name: 'Artwork Extraction', dept: 'DESIGN', taskType: 'Artwork Extraction', actionType: 'A', entityType: 'Artwork', priority: 'Medium', slaHours: 24, aiFirstAttempt: true, triggerEvent: 'ARTWORK_CREATED', description: 'Extract the vector/raster artwork from a customer-supplied file.', checklist: [{ item: 'Artwork isolated' }, { item: 'Resolution OK' }] },
+    { code: 'CUSTOMER_MOCKUP', name: 'Customer Mockup', dept: 'DESIGN', taskType: 'Mockup Creation', actionType: 'A', entityType: 'Artwork', priority: 'High', slaHours: 8, aiFirstAttempt: true, triggerEvent: 'MOCKUP_REQUESTED', description: 'Place approved artwork on garment templates for customer approval.', checklist: [{ item: 'Correct garment' }, { item: 'Correct placement' }, { item: 'Color accurate' }, { item: 'Customer-ready' }] },
+    { code: 'PRODUCTION_ARTWORK', name: 'Production Artwork', dept: 'DESIGN', taskType: 'Production Artwork', actionType: 'H', entityType: 'Sales Order', priority: 'High', slaHours: 24, triggerEvent: 'PAYMENT_RECEIVED', description: 'Prepare print-ready 300 DPI artwork for DTF/DTG production.', checklist: [{ item: '300 DPI' }, { item: 'Correct dimensions' }, { item: 'Whites/CMYK correct' }, { item: 'Transparent background' }, { item: 'File named correctly' }] },
+    { code: 'GANGSHEET_PREPARATION', name: 'Gangsheet Preparation', dept: 'DESIGN', taskType: 'Gangsheet Preparation', actionType: 'H', entityType: 'Sales Order', priority: 'High', slaHours: 8, triggerEvent: 'QA_APPROVED', dependsOnTaskType: 'Production Artwork', description: 'Nest the approved designs on a gangsheet for a DTF run.', checklist: [{ item: 'All artworks nested' }, { item: 'Sheet size correct' }, { item: 'No overlaps' }] },
+    { code: 'QA_REVIEW', name: 'QA Review', dept: 'QA', taskType: 'QA Review', actionType: 'G', entityType: 'Artwork', priority: 'High', slaHours: 2, triggerEvent: 'PRODUCTION_ARTWORK_SUBMITTED', description: 'Check resolution, transparency, halos and dimensions before approval.', checklist: [{ item: 'Resolution' }, { item: 'Transparency' }, { item: 'No halos' }, { item: 'Dimensions' }, { item: 'Color' }, { item: 'File format' }] },
+    { code: 'PURCHASE_ORDER_PREP', name: 'Purchase Order Prep', dept: 'SALES', taskType: 'Follow-up', actionType: 'H', entityType: 'Sales Order', priority: 'Medium', slaHours: 24, isActive: false, triggerEvent: 'GANGSHEET_QA_APPROVED', description: 'Draft the supplier purchase order from the approved order.', checklist: [{ item: 'Items verified' }, { item: 'Supplier selected' }] },
+    { code: 'FIX_BUG_TICKET', name: 'Fix / Bug Ticket', dept: 'IT', taskType: 'Bug Fix', actionType: 'H', entityType: 'System', priority: 'Medium', slaHours: 24, description: 'Internal IT ticket — bug fix, hardware or access request.', checklist: [{ item: 'Reproduced / verified' }] },
   ]
   for (const t of templates) {
     const { dept, checklist, ...rest } = t
     await db.taskTemplate.upsert({
       where: { code: t.code },
-      update: { triggerEvent: t.triggerEvent ?? null, dependsOnTaskType: t.dependsOnTaskType ?? null }, // keep event + dependency mapping in sync
+      update: { triggerEvent: t.triggerEvent ?? null, dependsOnTaskType: t.dependsOnTaskType ?? null, actionType: t.actionType || 'H' }, // keep event + dependency + A/H/G mapping in sync
       create: { ...rest, departmentId: deptByCode[dept] || null, checklistJson: JSON.stringify(checklist || []) },
     })
   }
+
+  // Backfill A/H/G on existing tasks (created before this field). Deterministic from taskType,
+  // so it is idempotent and self-healing. New tasks inherit actionType from their template at creation.
+  const A_TYPES = ['Artwork Extraction', 'Background Removal', 'Mockup Creation']
+  const G_TYPES = ['QA Review']
+  await db.task.updateMany({ where: { taskType: { in: A_TYPES } }, data: { actionType: 'A' } })
+  await db.task.updateMany({ where: { taskType: { in: G_TYPES } }, data: { actionType: 'G' } })
   console.log(`Seed complete — departments + ${templates.length} templates ready, admin: ${email}`)
 }
 

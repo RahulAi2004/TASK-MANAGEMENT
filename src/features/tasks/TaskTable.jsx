@@ -4,6 +4,22 @@ import StatusBadge from './StatusBadge'
 import PriorityFlag from './PriorityFlag'
 import { initials } from '../../auth/AuthContext'
 
+// A/H/G work-type badge. A = Automatic/AI · H = Human task · G = Validation Gate (manager approval).
+const ACTION_META = {
+  A: { label: 'AI', title: 'Automatic — AI / system performs it', cls: 'bg-status-submittedsoft text-status-submitted' },
+  H: { label: 'Human', title: 'Human task — needs an employee', cls: 'bg-subtle text-ink-secondary' },
+  G: { label: 'Gate', title: 'Validation gate — manager approval', cls: 'bg-status-warningsoft text-status-warning' },
+}
+function ActionTypeBadge({ type }) {
+  const m = ACTION_META[type] || ACTION_META.H
+  return (
+    <span title={m.title} className={'inline-flex items-center gap-1 rounded-chip px-1.5 py-0.5 text-[10px] font-semibold ' + m.cls}>
+      <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-white/60 text-[9px] font-bold">{(type || 'H')}</span>
+      {m.label}
+    </span>
+  )
+}
+
 function EntityChip({ type, id }) {
   return (
     <div className="leading-tight">
@@ -67,7 +83,10 @@ export default function TaskTable({ tasks, showAssignee = false, showCreator = f
               >
                 <td className="px-5 py-3 text-sm font-medium text-accent">{t.taskNo}</td>
                 <td className="py-3">
-                  <div className="text-sm font-medium text-ink">{t.title}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink">{t.title}</span>
+                    <ActionTypeBadge type={t.actionType} />
+                  </div>
                   {t.subtitle && <div className="text-xs text-ink-secondary">{t.subtitle}</div>}
                 </td>
                 <td className="py-3">

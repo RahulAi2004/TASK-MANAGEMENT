@@ -33,6 +33,7 @@ export async function createTaskFromTemplate(template, opts) {
       entityType: entityType || template.entityType || 'System',
       entityId: entityId,
       taskType: template.taskType,
+      actionType: template.actionType || 'H',   // A/H/G inherited from the template
       priority: template.priority,
       status: assignee ? 'Assigned' : 'Pending',   // no assignee yet -> Pending (dependency/auto later)
       assignedUserId: assignee?.id,

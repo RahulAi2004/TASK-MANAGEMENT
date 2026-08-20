@@ -28,6 +28,7 @@ model TaskTemplate {
   code               String      @unique // e.g. BACKGROUND_REMOVAL — referenced by automation
   description        String?
   taskType           String
+  actionType         String      @default("H") // A = Automatic/AI · H = Human task · G = Validation Gate (manager approval)
   entityType         String? // default related module: Artwork | Sales Order | Lead | System
   priority           String      @default("Medium") // Urgent | High | Medium | Low
   departmentId       String?
@@ -90,6 +91,7 @@ model Task {
   entityType String // Artwork | Sales Order | Lead | System
   entityId   String // AW-2026-000125
   taskType   String // Background Removal | Bug Fix | ...
+  actionType String @default("H") // A = Automatic/AI · H = Human task · G = Validation Gate (manager approval)
   priority   String @default("Medium") // Urgent | High | Medium | Low
   status     String @default("Pending") // see state machine
 

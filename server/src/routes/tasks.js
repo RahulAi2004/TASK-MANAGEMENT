@@ -46,7 +46,7 @@ tasksRouter.get('/stats', async (req, res) => {
 // ── List ─────────────────────────────────────────────────────────────────────
 // scope: mine (assigned to me) | team (assigned to others, admin) | delegated (created by me, assigned to others) | all (admin)
 tasksRouter.get('/', async (req, res) => {
-  const { scope = 'mine', status, q, priority } = req.query
+  const { scope = 'mine', status, q, priority, actionType } = req.query
   let where = { deletedAt: null }
 
   if (scope === 'all') {
@@ -69,6 +69,7 @@ tasksRouter.get('/', async (req, res) => {
     }
   }
   if (priority) where = { ...where, priority }
+  if (actionType && ['A', 'H', 'G'].includes(actionType)) where = { ...where, actionType }
   if (q) {
     where = {
       ...where,
@@ -115,6 +116,7 @@ const CreateSchema = z.object({
   entityType: z.string().min(1),
   entityId: z.string().min(1),
   taskType: z.string().min(1),
+  actionType: z.enum(['A', 'H', 'G']).default('H'),  // A = Automatic/AI · H = Human · G = Validation Gate
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']).default('Medium'),
   assignedUserId: z.string().min(1),
   dueAt: z.string().datetime().optional(),
@@ -162,6 +164,7 @@ tasksRouter.post('/', async (req, res) => {
       entityType: data.entityType,
       entityId: data.entityId,
       taskType: data.taskType,
+      actionType: data.actionType,
       priority: data.priority,
       status: 'Assigned',
       assignedUserId: assignee.id,
