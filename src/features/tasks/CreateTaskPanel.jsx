@@ -47,6 +47,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
     dueAt: '', estimatedMinutes: '', description: '',
   })
   const [checklist, setChecklist] = useState([{ item: '', isRequired: true }])
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false)
   const MAX_VOICE_NOTES = 5
   const [voiceNotes, setVoiceNotes] = useState([]) // [{ audio, transcript }]
   const [activeNote, setActiveNote] = useState(null) // recording not yet added to the list
@@ -77,6 +78,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
     setError(null)
     setVoiceNotes([])
     setActiveNote(null)
+    setSaveAsTemplate(false)
     // Apply template prefill (if any) when the panel opens
     if (initial) {
       setForm((f) => ({ ...f, ...initial }))
@@ -98,6 +100,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
   const submit = async () => {
     setBusy(true)
     setError(null)
+    const cleanChecklist = checklist.filter((c) => c.item.trim())
     try {
       await api.createTask({
         title: form.title,
@@ -113,8 +116,31 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
           audioData: n.audio,
           transcript: n.transcript || undefined,
         })),
-        checklist: checklist.filter((c) => c.item.trim()),
+        checklist: cleanChecklist,
       })
+
+      // Optionally save the same details as a reusable template (admin only).
+      if (saveAsTemplate && user.role === 'ADMIN') {
+        try {
+          await api.createTemplate({
+            name: form.title,
+            taskType: form.taskType,
+            entityType: form.entityType,
+            priority: form.priority,
+            description: form.description || undefined,
+            estimatedMinutes: form.estimatedMinutes ? Number(form.estimatedMinutes) : undefined,
+            checklist: cleanChecklist.map((c) => ({ item: c.item.trim(), isRequired: c.isRequired !== false })),
+          })
+        } catch (e) {
+          // Task was created; only the template failed (e.g. a template with that
+          // name already exists). Keep the panel open so the note is seen.
+          onCreated?.()
+          setError('Task created — but template not saved: ' + e.message)
+          setBusy(false)
+          return
+        }
+      }
+
       onCreated?.()
       onClose()
     } catch (e) {
@@ -152,7 +178,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               disabled={busy || !form.title || !form.assignedUserId}
               className="focus-ring rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
             >
-              {busy ? 'Creating…' : 'Create Task'}
+              {busy ? 'Creating…' : saveAsTemplate ? 'Create Task + Template' : 'Create Task'}
             </button>
             <button
               onClick={onClose}
@@ -348,6 +374,27 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 <Bot size={16} className="text-accent" /> AI First Attempt — enabled per template in a later phase
               </div>
             </section>
+
+            {user.role === 'ADMIN' && (
+              <section className="rounded-card border border-border bg-surface p-5 shadow-card">
+                <SectionHead n={8} title="Save as Template" optional />
+                <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink-secondary">
+                  <input
+                    type="checkbox"
+                    checked={saveAsTemplate}
+                    onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-border-strong accent-accent"
+                  />
+                  <span>
+                    Also save these details as a reusable template — it will appear under{' '}
+                    <span className="font-medium text-ink">Task Templates</span> for next time.
+                    <span className="mt-1 block text-xs text-ink-tertiary">
+                      Saves the title, type, priority, module, instructions and checklist.
+                    </span>
+                  </span>
+                </label>
+              </section>
+            )}
           </div>
         </div>
       </div>
