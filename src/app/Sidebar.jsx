@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, Plus, FileStack, BarChart3, Users2,
-  Building2, UserCog, Settings, CheckSquare, ListChecks,
+  Settings, CheckSquare, ListChecks,
   CheckCircle2, Ticket, Inbox,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -14,8 +14,6 @@ const NAV_BY_ROLE = {
     { to: '/workload', label: 'Team Workload', icon: Users2 },
     { to: '/templates', label: 'Task Templates', icon: FileStack },
     { to: '/reports', label: 'Reports', icon: BarChart3 },
-    { to: '/departments', label: 'Departments', icon: Building2 },
-    { to: '/users', label: 'Users', icon: UserCog },
     { to: '/settings', label: 'Settings', icon: Settings },
   ],
   SALES: [
