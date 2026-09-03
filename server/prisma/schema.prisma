@@ -135,6 +135,7 @@ model Task {
   dependencies TaskDependency[] @relation("dependent")    // tasks this one WAITS ON
   dependents   TaskDependency[] @relation("prerequisite") // tasks WAITING ON this one
   files        TaskFile[]
+  artworks     TaskArtwork[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -240,6 +241,29 @@ model TaskFile {
   sizeBytes    Int?
   uploadedById String?
   createdAt    DateTime @default(now())
+}
+
+// An artwork picked from the central Artwork Vault and sent to this task — from Design Studio's
+// vault grid, or from any app that can name a vault asset. The bytes stay in Nextcloud: only the
+// asset id (so the studio can re-open the original) and a small thumbnail (so any app can show it
+// without vault access) are kept here. fileName is the vault's own name, never a renamed copy.
+model TaskArtwork {
+  id           String   @id @default(uuid())
+  taskId       String
+  task         Task     @relation(fields: [taskId], references: [id])
+  assetId      String   // artwork_vault_assets.id in the central DB
+  fileName     String   // exact source name, e.g. AW-WALB-0142-FNL.png
+  artworkCode  String?
+  customerName String?
+  folder       String?
+  mimeType     String?
+  sizeBytes    Int?
+  thumbData    String?  // small data URL preview (<= ~200 KB), rendered where the vault is unreachable
+  sourceApp    String   @default("design-studio")
+  addedById    String?
+  createdAt    DateTime @default(now())
+
+  @@unique([taskId, assetId])
 }
 
 // A task (taskId) waits on a predecessor (dependsOnTaskId). The dependent stays in "Waiting"

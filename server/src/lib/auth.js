@@ -3,8 +3,14 @@ import { db } from './db.js'
 
 const SECRET = process.env.JWT_SECRET || 'dev-secret'
 
-export function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, SECRET, { expiresIn: '12h' })
+/**
+ * `claims` carries what the DB does not know: `sadm` records that Authentik put this
+ * person in the suite's admin group at sign-in time. It is deliberately not stored on
+ * the user — group membership belongs to Authentik, and a stale copy in this database
+ * would be a second, quieter answer to "is this person an admin?".
+ */
+export function signToken(user, claims = {}) {
+  return jwt.sign({ sub: user.id, role: user.role, ...claims }, SECRET, { expiresIn: '12h' })
 }
 
 /** Require a valid Bearer token; attaches req.user (fresh from DB). */
@@ -19,7 +25,9 @@ export async function authRequired(req, res, next) {
       select: { id: true, email: true, name: true, role: true, title: true, color: true, departmentId: true },
     })
     if (!user) return res.status(401).json({ error: 'User not found' })
-    req.user = user
+    // Left undefined (not false) for a token issued before suite-admin claims existed,
+    // or for a password login, so a client can tell "not an admin" from "not asserted".
+    req.user = { ...user, suiteAdmin: payload.sadm }
     next()
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' })
