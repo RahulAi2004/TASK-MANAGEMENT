@@ -43,6 +43,42 @@ usersRouter.post('/', requireRole('ADMIN'), async (req, res) => {
   res.status(201).json({ user, tempPassword })
 })
 
+// Admin-only: change an existing person's role. The Task Management Access card
+// in the suite Access Manager posts here, so suite-side role changes land in the
+// same validated path as an in-app edit.
+const RoleSchema = z.object({
+  role: z.enum(['ADMIN', 'SALES', 'DESIGNER', 'IT']),
+  title: z.string().max(80).optional(),
+  departmentId: z.string().nullable().optional(),
+})
+
+usersRouter.patch('/:id', requireRole('ADMIN'), async (req, res) => {
+  const parsed = RoleSchema.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid payload' })
+  const { role, title, departmentId } = parsed.data
+
+  const target = await db.user.findUnique({ where: { id: req.params.id } })
+  if (!target) return res.status(404).json({ error: 'User not found' })
+
+  // Never let the last administrator be demoted — that locks everyone out of Users.
+  if (target.role === 'ADMIN' && role !== 'ADMIN') {
+    const admins = await db.user.count({ where: { role: 'ADMIN' } })
+    if (admins <= 1) return res.status(409).json({ error: 'The last administrator cannot be demoted' })
+  }
+
+  const user = await db.user.update({
+    where: { id: target.id },
+    data: {
+      role,
+      title: title || (role === target.role ? target.title : role[0] + role.slice(1).toLowerCase()),
+      color: ROLE_COLOR[role],
+      ...(departmentId === undefined ? {} : { departmentId: departmentId || null }),
+    },
+    select: { id: true, name: true, email: true, role: true, title: true, color: true },
+  })
+  res.json({ user })
+})
+
 // GET /api/users?assignable=1 — people the current user may assign tasks to,
 // with workload hints ("6 open · 2 due today").
 usersRouter.get('/', async (req, res) => {

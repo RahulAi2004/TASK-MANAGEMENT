@@ -3,7 +3,7 @@ import { CheckSquare, Eye, EyeOff, LogIn } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, ssoError } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -81,6 +81,12 @@ export default function Login() {
 
           <h2 className="text-2xl font-semibold text-ink">Sign in</h2>
           <p className="mt-1 text-sm text-ink-secondary">Welcome back. Enter your credentials to continue.</p>
+
+          {!error && ssoError && (
+            <div className="mt-4 rounded-control border border-status-warning/30 bg-status-warningsoft px-4 py-2.5 text-sm text-status-warning">
+              {ssoError}
+            </div>
+          )}
 
           {error && (
             <div className="mt-4 rounded-control border border-status-danger/30 bg-status-dangersoft px-4 py-2.5 text-sm text-status-danger">
