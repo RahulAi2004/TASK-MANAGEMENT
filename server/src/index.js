@@ -11,6 +11,7 @@ import { adminRouter } from './routes/admin.js'
 import { templatesRouter } from './routes/templates.js'
 import { routinesRouter } from './routes/routines.js'
 import { eventsRouter } from './routes/events.js'
+import { integrationRouter } from './routes/integration.js'
 import { transcribeRouter } from './routes/transcribe.js'
 import { notificationsRouter, startReminderSweep } from './routes/notifications.js'
 
@@ -27,6 +28,7 @@ app.use('/api/admin', adminRouter)
 app.use('/api/templates', templatesRouter)
 app.use('/api/routines', routinesRouter)
 app.use('/api/events', eventsRouter)
+app.use('/api/integration', integrationRouter)
 app.use('/api/transcribe', transcribeRouter)
 app.use('/api/notifications', notificationsRouter)
 
