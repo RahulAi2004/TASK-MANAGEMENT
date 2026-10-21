@@ -8,7 +8,7 @@ import { api } from '../data/api'
 import { useApi, initials } from '../auth/AuthContext'
 
 const STATUS_COLORS = {
-  Assigned: '#2564CF', Accepted: '#2564CF', 'In Progress': '#3B7AD9',
+  Assigned: '#1A66E5', Accepted: '#1A66E5', 'In Progress': '#3B82F6',
   Waiting: '#C19C00', 'On Hold': '#C19C00', Submitted: '#5B4BE6',
   Completed: '#107C10', Rejected: '#D13438', Reopened: '#D13438',
   Pending: '#A19F9D', Cancelled: '#A19F9D',
@@ -77,7 +77,7 @@ function WorkloadMini({ rows }) {
                 <span className="text-xs text-ink-tertiary">{u.openTasks}/{u.capacity}</span>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-subtle">
-                <div className="h-full rounded-full" style={{ width: Math.min(100, (u.openTasks / u.capacity) * 100) + '%', background: u.openTasks > u.capacity * 0.8 ? '#D13438' : '#2564CF' }} />
+                <div className="h-full rounded-full" style={{ width: Math.min(100, (u.openTasks / u.capacity) * 100) + '%', background: u.openTasks > u.capacity * 0.8 ? '#D13438' : '#1A66E5' }} />
               </div>
             </div>
             {u.overdue > 0 && (
@@ -91,12 +91,12 @@ function WorkloadMini({ rows }) {
 }
 
 const ACT_ICON = {
-  Created: { Icon: Plus, color: '#2564CF' },
-  Started: { Icon: Clock, color: '#3B7AD9' },
+  Created: { Icon: Plus, color: '#1A66E5' },
+  Started: { Icon: Clock, color: '#3B82F6' },
   Submitted: { Icon: Upload, color: '#5B4BE6' },
   Approved: { Icon: CheckCircle2, color: '#107C10' },
   Rejected: { Icon: XCircle, color: '#D13438' },
-  Assigned: { Icon: Plus, color: '#2564CF' },
+  Assigned: { Icon: Plus, color: '#1A66E5' },
 }
 function timeAgo(iso) {
   const s = Math.floor((Date.now() - new Date(iso)) / 1000)
@@ -205,7 +205,7 @@ export default function Dashboard() {
             <div className="rounded-card border border-border bg-surface shadow-card">
               <div className="flex items-center justify-between border-b border-border px-5 py-4">
                 <h3 className="text-[15px] font-semibold text-ink">All Tasks</h3>
-                <Link to="/all-tasks" className="text-xs font-medium text-accent hover:underline">View All →</Link>
+                <Link to="/" className="text-xs font-medium text-accent hover:underline">View All →</Link>
               </div>
               {tasks.loading ? (
                 <div className="px-5 py-10 text-center text-sm text-ink-tertiary">Loading…</div>

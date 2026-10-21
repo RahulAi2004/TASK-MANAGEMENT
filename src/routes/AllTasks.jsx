@@ -1,135 +1,260 @@
-// Tasks — admin gets All / Team / My scope tabs; everyone else sees only My Tasks.
-import { useState } from 'react'
-import { Search } from 'lucide-react'
+// Task Management — stat cards · filters · All Tasks table · right-docked Task Detail panel.
+// Admin sees every task (Owner filter narrows it); other roles see the tasks assigned to them.
+// Status, search and date range filter on the server; type, module, owner and SLA (derived
+// values) filter on the loaded rows.
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Search, ChevronDown, Calendar, RotateCw, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
 import AppShell from '../app/AppShell'
-import TaskTable from '../features/tasks/TaskTable'
+import StatCards from '../features/dashboard/StatCards'
+import TaskGrid from '../features/tasks/TaskGrid'
+import TaskDetailPanel from '../features/tasks/TaskDetailPanel'
+import TaskSettingsModal from '../features/settings/TaskSettingsModal'
+import useNow from '../features/tasks/useNow'
+import { taskCategory, slaStatus } from '../features/tasks/taskMeta'
 import { api } from '../data/api'
 import { useApi, useAuth } from '../auth/AuthContext'
 
-const STATUSES = ['All', 'Assigned', 'In Progress', 'Submitted', 'Completed', 'Overdue']
-// A/H/G work-type filter. A = Automatic/AI · H = Human task · G = Validation Gate (manager approval).
-const ACTION_TYPES = [
-  { key: '', label: 'All types' },
-  { key: 'A', label: 'A · AI / Auto' },
-  { key: 'H', label: 'H · Human' },
-  { key: 'G', label: 'G · Gate' },
+const STATUSES = ['All', 'Pending', 'Assigned', 'In Progress', 'Waiting / On Hold', 'Submitted', 'Completed', 'Rejected', 'Cancelled', 'Overdue']
+const CATEGORIES = ['All', 'Order Related', 'General']
+const SLAS = ['All', 'Normal', 'Critical', 'Delayed']
+const RANGES = [
+  { key: 'all', label: 'All time' },
+  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'This week' },
+  { key: 'month', label: 'This month' },
+  { key: '30d', label: 'Last 30 days' },
 ]
-const SCOPES = [
-  { key: 'all', label: 'All Tasks' },
-  { key: 'team', label: 'Team Tasks' },
-  { key: 'mine', label: 'My Tasks' },
-]
+const PAGE_SIZE = 20
+const DEFAULTS = { category: 'All', module: 'All', status: 'All', sla: 'All', owner: 'All', range: 'all' }
+
+function rangeStart(key) {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  if (key === 'today') return d
+  if (key === 'week') { d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d } // Monday
+  if (key === 'month') { d.setDate(1); return d }
+  if (key === '30d') { d.setDate(d.getDate() - 29); return d }
+  return null
+}
+
+function Select({ label, value, onChange, children, icon: Icon }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-sm font-medium text-ink">{label}</span>
+      <span className="relative block">
+        {Icon && <Icon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-secondary" />}
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={
+            'focus-ring h-10 w-full appearance-none rounded-control border border-border-strong bg-surface pr-9 text-sm text-ink ' +
+            (Icon ? 'pl-9' : 'pl-3')
+          }
+        >
+          {children}
+        </select>
+        <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-secondary" />
+      </span>
+    </label>
+  )
+}
 
 export default function AllTasks() {
   const { user } = useAuth()
   const isAdmin = user.role === 'ADMIN'
-  const [scope, setScope] = useState(isAdmin ? 'all' : 'mine')
-  const [status, setStatus] = useState('All')
-  const [actionType, setActionType] = useState('')
-  const [q, setQ] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [params, setParams] = useSearchParams()
+  const selectedId = params.get('task')
+  const urlQ = params.get('q') || ''
 
-  // Non-admins are always locked to their own tasks.
-  const effectiveScope = isAdmin ? scope : 'mine'
-  const { data, loading, reload } = useApi(
-    () => api.tasks({ scope: effectiveScope, ...(status !== 'All' ? { status } : {}), ...(actionType ? { actionType } : {}), ...(q ? { q } : {}) }),
-    [effectiveScope, status, actionType, q]
+  const [q, setQ] = useState(urlQ)
+  const [debouncedQ, setDebouncedQ] = useState(urlQ)
+  const [f, setF] = useState(DEFAULTS)
+  const [page, setPage] = useState(1)
+  const set = (k) => (v) => { setF((x) => ({ ...x, [k]: v })); setPage(1) }
+  const now = useNow(30_000)
+
+  // Top-bar search lands here as ?q=
+  useEffect(() => { setQ(urlQ); setDebouncedQ(urlQ) }, [urlQ])
+  useEffect(() => {
+    const id = setTimeout(() => { setDebouncedQ(q.trim()); setPage(1) }, 300)
+    return () => clearTimeout(id)
+  }, [q])
+
+  const from = rangeStart(f.range)
+  const stats = useApi(() => api.stats(), [])
+  const list = useApi(
+    () =>
+      api.tasks({
+        scope: isAdmin ? 'all' : 'mine',
+        limit: 500,
+        ...(f.status !== 'All' ? { status: f.status } : {}),
+        ...(debouncedQ ? { q: debouncedQ } : {}),
+        ...(from ? { from: from.toISOString() } : {}),
+      }),
+    [isAdmin, f.status, debouncedQ, f.range]
   )
+  const reloadAll = () => { stats.reload(); list.reload() }
 
-  const subtitle = isAdmin
-    ? 'Every task across the organization'
-    : 'Tasks assigned to you'
+  const all = list.data?.tasks || []
+  // Dropdown options come from the loaded rows so they only list values that exist.
+  const modules = useMemo(() => [...new Set(all.map((t) => t.department?.name).filter(Boolean))].sort(), [all])
+  const owners = useMemo(() => {
+    const m = new Map()
+    all.forEach((t) => t.assignedUser && m.set(t.assignedUser.id, t.assignedUser.name))
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [all])
 
-  const emptyText =
-    effectiveScope === 'mine'
-      ? 'No tasks assigned to you'
-      : effectiveScope === 'team'
-        ? 'No team tasks match the filter'
-        : 'No tasks match the filter'
+  const rows = all.filter(
+    (t) =>
+      (f.category === 'All' || taskCategory(t) === f.category) &&
+      (f.module === 'All' || t.department?.name === f.module) &&
+      (f.owner === 'All' || (f.owner === 'none' ? !t.assignedUser : t.assignedUser?.id === f.owner)) &&
+      (f.sla === 'All' || slaStatus(t, now) === f.sla)
+  )
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const current = Math.min(page, pages)
+  const pageRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+
+  const filtersActive = q || Object.keys(DEFAULTS).some((k) => f[k] !== DEFAULTS[k])
+  const clearFilters = () => {
+    setF(DEFAULTS)
+    setQ('')
+    setPage(1)
+    if (urlQ) setParams((p) => { p.delete('q'); return p })
+  }
+  const openTask = (id) => setParams((p) => { p.set('task', id); return p })
+  const closeTask = () => setParams((p) => { p.delete('task'); return p })
 
   return (
-    <AppShell title="Tasks" subtitle={subtitle} onTasksChanged={reload}>
-      <div className="rounded-card border border-border bg-surface shadow-card">
-        {/* Scope tabs — admin only */}
-        {isAdmin && (
-          <div className="flex gap-1 border-b border-border px-3 pt-2">
-            {SCOPES.map((s) => (
+    <AppShell
+      title="Task Management"
+      subtitle="Manage, monitor and complete all tasks in one place"
+      onTasksChanged={reloadAll}
+      actions={
+        isAdmin && (
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="focus-ring flex items-center gap-2 rounded-control border border-accent bg-surface px-5 py-2.5 text-[15px] font-medium text-accent hover:bg-accent-soft"
+          >
+            <Settings size={18} /> Settings
+          </button>
+        )
+      }
+      aside={selectedId && <TaskDetailPanel key={selectedId} taskId={selectedId} onClose={closeTask} onChanged={reloadAll} />}
+    >
+      <div className="space-y-4">
+        <StatCards
+          stats={stats.data?.stats}
+          active={f.status}
+          onSelect={(s) => set('status')(s)}
+        />
+
+        {/* Filters */}
+        <section className="rounded-card border border-border bg-surface p-4 shadow-card">
+          <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="block min-w-0">
+              <span className="mb-1.5 block text-sm font-medium text-ink">Search tasks</span>
+              <span className="relative block">
+                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-secondary" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search by task no, title, customer…"
+                  className="focus-ring h-10 w-full rounded-control border border-border-strong bg-surface pl-9 pr-3 text-sm text-ink placeholder:text-ink-tertiary"
+                />
+              </span>
+            </label>
+            <Select label="Task Type" value={f.category} onChange={set('category')}>
+              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+            </Select>
+            <Select label="Module" value={f.module} onChange={set('module')}>
+              <option value="All">All modules</option>
+              {modules.map((m) => <option key={m}>{m}</option>)}
+            </Select>
+            <Select label="Task Status" value={f.status} onChange={set('status')}>
+              {STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </Select>
+
+            <Select label="SLA Status" value={f.sla} onChange={set('sla')}>
+              {SLAS.map((s) => <option key={s}>{s}</option>)}
+            </Select>
+            {isAdmin ? (
+              <Select label="Owner" value={f.owner} onChange={set('owner')}>
+                <option value="All">All owners</option>
+                {owners.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                <option value="none">Unassigned</option>
+              </Select>
+            ) : (
+              <div className="hidden xl:block" />
+            )}
+            <Select label="Date range" value={f.range} onChange={set('range')} icon={Calendar}>
+              {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+            </Select>
+            <div className="flex items-end">
               <button
-                key={s.key}
-                onClick={() => setScope(s.key)}
-                className={
-                  'focus-ring -mb-px border-b-2 px-4 py-2 text-sm ' +
-                  (scope === s.key
-                    ? 'border-accent font-semibold text-accent'
-                    : 'border-transparent text-ink-secondary hover:text-ink')
-                }
+                onClick={clearFilters}
+                disabled={!filtersActive}
+                className="focus-ring flex h-10 w-full items-center justify-center gap-2 rounded-control border border-accent bg-surface px-4 text-sm font-medium text-accent hover:bg-accent-soft disabled:border-border-strong disabled:text-ink-tertiary disabled:hover:bg-surface"
               >
-                {s.label}
+                <RotateCw size={16} /> Clear filters
               </button>
-            ))}
+            </div>
           </div>
-        )}
+        </section>
 
-        <div className="flex flex-wrap items-center gap-2 px-5 py-3">
-          <div className="relative min-w-[220px] flex-1">
-            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-tertiary" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="focus-ring w-full rounded-control border border-border-strong bg-surface py-1.5 pl-8 pr-3 text-sm placeholder:text-ink-tertiary"
-              placeholder="Search by title, task no, entity…"
-            />
+        {/* Table */}
+        <section className="rounded-card border border-border bg-surface shadow-card">
+          <div className="flex items-center justify-between px-5 py-4">
+            <h2 className="text-[20px] font-semibold text-ink">{isAdmin ? 'All Tasks' : 'My Tasks'}</h2>
+            {list.loading && all.length > 0 && <span className="text-xs text-ink-tertiary">Refreshing…</span>}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {STATUSES.map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatus(s)}
-                className={
-                  'focus-ring rounded-control px-3 py-1.5 text-sm ' +
-                  (status === s
-                    ? 'bg-accent-soft font-semibold text-accent'
-                    : 'text-ink-secondary hover:bg-subtle')
-                }
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* A / H / G work-type filter */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-2.5">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">Type</span>
-          {ACTION_TYPES.map((a) => (
-            <button
-              key={a.key || 'all'}
-              onClick={() => setActionType(a.key)}
-              title={a.key === 'A' ? 'Automatic — AI / system performs it' : a.key === 'H' ? 'Human task — needs an employee' : a.key === 'G' ? 'Validation gate — manager approval' : 'All work types'}
-              className={
-                'focus-ring rounded-control px-3 py-1.5 text-sm ' +
-                (actionType === a.key
-                  ? 'bg-accent-soft font-semibold text-accent'
-                  : 'text-ink-secondary hover:bg-subtle')
-              }
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="px-5 py-10 text-center text-sm text-ink-tertiary">Loading…</div>
-        ) : (
-          <TaskTable
-            tasks={data?.tasks}
-            showAssignee={effectiveScope !== 'mine'}
-            showCreator
-            showDept
-            showAssignedOn
-            emptyText={emptyText}
-          />
-        )}
+          {list.error ? (
+            <div className="border-t border-border px-5 py-10 text-center text-sm text-status-danger">{list.error}</div>
+          ) : list.loading && all.length === 0 ? (
+            <div className="border-t border-border px-5 py-10 text-center text-sm text-ink-tertiary">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="border-t border-border px-5 py-12 text-center text-sm text-ink-tertiary">
+              {filtersActive ? 'No tasks match these filters.' : isAdmin ? 'No tasks yet.' : 'No tasks assigned to you.'}
+            </div>
+          ) : (
+            <>
+              <div className="border-t border-border">
+                <TaskGrid tasks={pageRows} now={now} selectedId={selectedId} onOpen={openTask} />
+              </div>
+              <div className="flex items-center justify-between border-t border-border px-5 py-3 text-sm text-ink-secondary">
+                <span>
+                  Showing {(current - 1) * PAGE_SIZE + 1} to {Math.min(current * PAGE_SIZE, rows.length)} of {rows.length} tasks
+                  {all.length >= 500 && <span className="text-ink-tertiary"> (first 500 — narrow the filters to see more)</span>}
+                </span>
+                {pages > 1 && (
+                  <span className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage(current - 1)}
+                      disabled={current === 1}
+                      className="focus-ring grid h-8 w-8 place-items-center rounded-control hover:bg-subtle disabled:opacity-40"
+                      title="Previous page"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="px-1 tabular-nums">{current} / {pages}</span>
+                    <button
+                      onClick={() => setPage(current + 1)}
+                      disabled={current === pages}
+                      className="focus-ring grid h-8 w-8 place-items-center rounded-control hover:bg-subtle disabled:opacity-40"
+                      title="Next page"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </section>
       </div>
+      {isAdmin && <TaskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
     </AppShell>
   )
 }

@@ -4,7 +4,7 @@ import AppShell from '../app/AppShell'
 import { api } from '../data/api'
 import { useApi } from '../auth/AuthContext'
 
-const TYPE_COLORS = ['#2564CF', '#5B4BE6', '#0F7B6C', '#E8710A', '#C19C00', '#605E5C']
+const TYPE_COLORS = ['#1A66E5', '#5B4BE6', '#0F7B6C', '#E8710A', '#C19C00', '#605E5C']
 
 function BarChart({ perDay }) {
   const max = Math.max(1, ...perDay.map((d) => Math.max(d.completed, d.created)))

@@ -1,27 +1,30 @@
-// Status → badge styling per docs/TECHNICAL_DESIGN.md §2.2.
+// Task status → chip styling (soft fill + matching hairline border).
 const MAP = {
-  Pending: { bg: '#F3F2F1', fg: '#605E5C' },
-  Assigned: { bg: '#EAF1FC', fg: '#2564CF' },
-  Accepted: { bg: '#EAF1FC', fg: '#2564CF' },
-  'In Progress': { bg: '#EAF1FC', fg: '#2564CF' },
-  'Waiting / On Hold': { bg: '#FFF4CE', fg: '#8A6D00' },
+  Pending: { bg: '#F1F4F9', fg: '#5B6474' },
+  Assigned: { bg: '#EAF2FF', fg: '#1A66E5' },
+  Accepted: { bg: '#EAF2FF', fg: '#1A66E5' },
+  'In Progress': { bg: '#EAF2FF', fg: '#1A66E5' },
   Waiting: { bg: '#FFF4CE', fg: '#8A6D00' },
-  Submitted: { bg: '#F0EBFA', fg: '#5B4BE6' },
-  Completed: { bg: '#DFF6DD', fg: '#107C10' },
+  'On Hold': { bg: '#FFF1E0', fg: '#C25E00', label: 'Hold' },
+  Submitted: { bg: '#F1EBFD', fg: '#6B47D6' },
+  Completed: { bg: '#E7F6EC', fg: '#1E7B34' },
   Rejected: { bg: '#FDE7E9', fg: '#D13438' },
   Reopened: { bg: '#FFF4CE', fg: '#8A6D00' },
   Overdue: { bg: '#FDE7E9', fg: '#D13438' },
-  Cancelled: { bg: '#F3F2F1', fg: '#A19F9D' },
+  Cancelled: { bg: '#F1F4F9', fg: '#98A1B0' },
 }
 
-export default function StatusBadge({ status }) {
+export default function StatusBadge({ status, size = 'md' }) {
   const s = MAP[status] || MAP.Pending
   return (
     <span
-      className="inline-flex items-center rounded-chip px-2.5 py-1 text-xs font-semibold"
-      style={{ background: s.bg, color: s.fg }}
+      className={
+        'inline-flex items-center whitespace-nowrap rounded-chip border font-medium ' +
+        (size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs')
+      }
+      style={{ background: s.bg, color: s.fg, borderColor: s.fg + '33' }}
     >
-      {status}
+      {s.label || status}
     </span>
   )
 }

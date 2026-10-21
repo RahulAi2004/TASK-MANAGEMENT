@@ -44,10 +44,12 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
   const [form, setForm] = useState({
     title: '', taskType: TASK_TYPES[0], priority: 'High',
     entityType: 'Artwork', entityId: '', assignedUserId: '',
+    category: 'General', customerName: '', routineTaskId: '',
     dueAt: '', estimatedMinutes: '', description: '',
   })
   const [checklist, setChecklist] = useState([{ item: '', isRequired: true }])
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
+  const [routines, setRoutines] = useState([])
   const MAX_VOICE_NOTES = 5
   const [voiceNotes, setVoiceNotes] = useState([]) // [{ audio, transcript }]
   const [activeNote, setActiveNote] = useState(null) // recording not yet added to the list
@@ -79,6 +81,8 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
     setVoiceNotes([])
     setActiveNote(null)
     setSaveAsTemplate(false)
+    setForm((f) => ({ ...f, routineTaskId: '' }))
+    api.routines({ active: 1 }).then((d) => setRoutines(d.routines)).catch(() => setRoutines([]))
     // Apply template prefill (if any) when the panel opens
     if (initial) {
       setForm((f) => ({ ...f, ...initial }))
@@ -97,6 +101,27 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
   if (!open) return null
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
+  // Routine task → prefill title, description, priority, normal time, and (via its template)
+  // work type + checklist. The server snapshots the routine's SLA thresholds onto the task.
+  const routine = routines.find((r) => r.id === form.routineTaskId)
+  const pickRoutine = (id) => {
+    const r = routines.find((x) => x.id === id)
+    if (!r) return setForm((f) => ({ ...f, routineTaskId: '' }))
+    setForm((f) => ({
+      ...f,
+      routineTaskId: r.id,
+      title: r.title,
+      description: r.description || f.description,
+      priority: r.priority,
+      estimatedMinutes: String(r.normalMinutes),
+      taskType: r.template?.taskType && TASK_TYPES.includes(r.template.taskType) ? r.template.taskType : f.taskType,
+    }))
+    let items = []
+    try { items = JSON.parse(r.template?.checklistJson || '[]') } catch { items = [] }
+    if (items.length) setChecklist(items.map((c) => ({ item: typeof c === 'string' ? c : c.item, isRequired: c.isRequired !== false })))
+  }
+  const hm = (min) => (min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? ' ' + (min % 60) + 'm' : ''}` : `${min}m`)
+
   const submit = async () => {
     setBusy(true)
     setError(null)
@@ -108,6 +133,9 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
         priority: form.priority,
         entityType: form.entityType,
         entityId: form.entityId || 'GENERAL',
+        category: form.category,
+        customerName: form.customerName.trim() || undefined,
+        routineTaskId: form.routineTaskId || undefined,
         assignedUserId: form.assignedUserId,
         description: form.description || undefined,
         dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : undefined,
@@ -200,6 +228,27 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
           <div className="space-y-6">
             <section className="rounded-card border border-border bg-surface p-5 shadow-card">
               <SectionHead n={1} title="Task Information" />
+              {routines.length > 0 && (
+                <div className="mb-4">
+                  <Field label="Routine Task">
+                    <select className={inputCls} value={form.routineTaskId} onChange={(e) => pickRoutine(e.target.value)}>
+                      <option value="">None — custom task</option>
+                      {routines.map((r) => (
+                        <option key={r.id} value={r.id}>{r.title} · {r.department?.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  {routine && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+                      <span className="text-ink-tertiary">SLA</span>
+                      <span className="rounded-chip bg-[#E7F6EC] px-1.5 py-0.5 text-[#1E7B34]">Normal {hm(routine.normalMinutes)}</span>
+                      <span className="rounded-chip bg-[#FFF1E0] px-1.5 py-0.5 text-[#C25E00]">Critical {hm(routine.criticalMinutes)}</span>
+                      <span className="rounded-chip bg-[#FDE7E9] px-1.5 py-0.5 text-[#D13438]">Delayed {hm(routine.delayedMinutes)}</span>
+                      <span className="text-ink-tertiary">· routed to {routine.department?.name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <Field label="Task Title" required>
@@ -207,6 +256,11 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                   </Field>
                 </div>
                 <Field label="Task Type" required>
+                  <select className={inputCls} value={form.category} onChange={set('category')}>
+                    {['Order Related', 'General'].map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </Field>
+                <Field label="Work Type" required>
                   <select className={inputCls} value={form.taskType} onChange={set('taskType')}>
                     {TASK_TYPES.map((t) => <option key={t}>{t}</option>)}
                   </select>
@@ -217,12 +271,23 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                   </select>
                 </Field>
                 <Field label="Related Module" required>
-                  <select className={inputCls} value={form.entityType} onChange={set('entityType')}>
+                  <select
+                    className={inputCls}
+                    value={form.entityType}
+                    onChange={(e) => {
+                      const entityType = e.target.value
+                      // Order records default to "Order Related"; the user can still change it.
+                      setForm((f) => ({ ...f, entityType, category: entityType === 'Sales Order' ? 'Order Related' : f.category }))
+                    }}
+                  >
                     {ENTITY_TYPES.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </Field>
                 <Field label="Related Record" required>
                   <input className={inputCls} value={form.entityId} onChange={set('entityId')} placeholder="AW-2026-000125" />
+                </Field>
+                <Field label="Customer Name">
+                  <input className={inputCls} value={form.customerName} onChange={set('customerName')} maxLength={160} placeholder="e.g. Bright Wear Co." />
                 </Field>
               </div>
             </section>
@@ -271,7 +336,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 <Field label="Due Date & Time" required>
                   <input className={inputCls} type="datetime-local" value={form.dueAt} onChange={set('dueAt')} />
                 </Field>
-                <Field label="Estimated (min)">
+                <Field label="Normal Time (min)">
                   <input className={inputCls} type="number" value={form.estimatedMinutes} onChange={set('estimatedMinutes')} placeholder="45" />
                 </Field>
               </div>

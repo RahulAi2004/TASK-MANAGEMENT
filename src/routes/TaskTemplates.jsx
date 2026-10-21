@@ -7,7 +7,7 @@ import Modal, { modalInput, Toast } from '../components/Modal'
 import CreateTaskPanel from '../features/tasks/CreateTaskPanel'
 import { api } from '../data/api'
 
-const DEPT_COLOR = { DESIGN: '#5B4BE6', PRODUCTION: '#0F7B6C', QA: '#C19C00', PROCUREMENT: '#E8710A', IT: '#605E5C', SALES: '#2564CF' }
+const DEPT_COLOR = { DESIGN: '#5B4BE6', PRODUCTION: '#0F7B6C', QA: '#C19C00', PROCUREMENT: '#E8710A', IT: '#605E5C', SALES: '#1A66E5' }
 const PRIOS = ['Urgent', 'High', 'Medium', 'Low']
 const ENTITY_TYPES = ['Artwork', 'Sales Order', 'Lead', 'System']
 const SLA_OPTS = [['Rush — 2h', 2], ['Same day — 8h', 8], ['Standard — 24h', 24], ['No SLA', null]]

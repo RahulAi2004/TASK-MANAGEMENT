@@ -7,7 +7,7 @@ import { api } from '../data/api'
 import { useApi, initials } from '../auth/AuthContext'
 
 const ROLE_CHIP = {
-  ADMIN: { label: 'Admin', bg: '#2564CF' },
+  ADMIN: { label: 'Admin', bg: '#1A66E5' },
   SALES: { label: 'Sales', bg: '#0F7B6C' },
   DESIGNER: { label: 'Designer', bg: '#5B4BE6' },
   IT: { label: 'IT', bg: '#605E5C' },

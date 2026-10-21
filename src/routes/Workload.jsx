@@ -4,7 +4,7 @@ import { api } from '../data/api'
 import { useApi, initials } from '../auth/AuthContext'
 
 const ROLE_CHIP = {
-  ADMIN: { label: 'Admin', bg: '#2564CF' },
+  ADMIN: { label: 'Admin', bg: '#1A66E5' },
   SALES: { label: 'Sales', bg: '#0F7B6C' },
   DESIGNER: { label: 'Designer', bg: '#5B4BE6' },
   IT: { label: 'IT', bg: '#605E5C' },
@@ -61,7 +61,7 @@ export default function Workload() {
                     <div className="h-1.5 w-28 overflow-hidden rounded-full bg-subtle">
                       <div
                         className="h-full rounded-full"
-                        style={{ width: pct + '%', background: pct > 80 ? '#D13438' : '#2564CF' }}
+                        style={{ width: pct + '%', background: pct > 80 ? '#D13438' : '#1A66E5' }}
                       />
                     </div>
                     <div className="mt-1 text-[11px] text-ink-tertiary">{u.openTasks} of {u.capacity}</div>

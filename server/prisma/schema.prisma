@@ -18,6 +18,7 @@ model Department {
   users     User[]
   tasks     Task[]
   templates TaskTemplate[]
+  routines  RoutineTask[]
 }
 
 // Blueprint that produces tasks — used by the manual "Use template" action AND by the
@@ -46,6 +47,34 @@ model TaskTemplate {
   createdById        String?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
+  routines           RoutineTask[]
+}
+
+// Routine task: a reusable task definition with SLA rules (Task Settings). Picking one in
+// Create Task prefills the task and snapshots the SLA thresholds onto it, so editing the
+// routine later never changes the SLA of tasks already in flight.
+// SLA on elapsed working time: < critical → Normal · ≥ critical → Critical · ≥ delayed → Delayed.
+// normalMinutes is the target ("Normal Time") and becomes the task's estimatedMinutes.
+model RoutineTask {
+  id              String        @id @default(uuid())
+  title           String
+  description     String?
+  departmentId    String
+  department      Department    @relation(fields: [departmentId], references: [id])
+  priority        String        @default("Medium") // Urgent | High | Medium | Low
+  normalMinutes   Int
+  criticalMinutes Int
+  delayedMinutes  Int
+  templateId      String? // optional blueprint: work type + checklist
+  template        TaskTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  isActive        Boolean       @default(true)
+  createdById     String?
+  createdBy       User?         @relation("routineCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  tasks           Task[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([departmentId, title])
 }
 
 model User {
@@ -66,6 +95,8 @@ model User {
   comments      Comment[]
   history       AssignmentHistory[] @relation("historyAssignee")
   notifications Notification[]
+  voiceNotes    TaskVoiceNote[]     @relation("voiceNoteRecorder")
+  routinesCreated RoutineTask[]     @relation("routineCreator")
   createdAt     DateTime            @default(now())
 }
 
@@ -112,6 +143,12 @@ model Task {
   requiresAcceptance Boolean @default(false)
   requiresReview     Boolean @default(true)
 
+  // Routine-task provenance + SLA thresholds snapshotted at creation (estimatedMinutes = normal/target)
+  routineTaskId      String?
+  routineTask        RoutineTask? @relation(fields: [routineTaskId], references: [id], onDelete: SetNull)
+  slaCriticalMinutes Int?
+  slaDelayedMinutes  Int?
+
   startAfter        DateTime?
   dueAt             DateTime?
   estimatedMinutes  Int?
@@ -148,6 +185,10 @@ model TaskVoiceNote {
   sequenceNo Int
   audioData  String // base64 data URL
   transcript String? // speech-to-text transcript
+  fileName        String? // e.g. print_alignment_check.mp3 (uploads) or "Recording 3"
+  durationSeconds Int?
+  recordedById    String?
+  recordedBy      User?    @relation("voiceNoteRecorder", fields: [recordedById], references: [id])
   createdAt  DateTime @default(now())
 }
 

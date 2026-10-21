@@ -52,7 +52,7 @@ function RoleRoutes() {
   if (!user) return <Login />
 
   const home = {
-    ADMIN: <Dashboard />,
+    ADMIN: <AllTasks />,
     SALES: <SalesDashboard />,
     DESIGNER: <DesignerQueue />,
     IT: <ItTickets />,
@@ -62,11 +62,12 @@ function RoleRoutes() {
     <Routes>
       <Route path="/" element={home} />
       <Route path="/task/:id" element={<TaskWorkView />} />
-      {/* Tasks page — all roles; the page itself limits non-admins to My Tasks */}
+      {/* Task Management — all roles (admin's home); the page limits non-admins to their own tasks */}
       <Route path="/all-tasks" element={<AllTasks />} />
 
       {user.role === 'ADMIN' && (
         <>
+          <Route path="/overview" element={<Dashboard />} />
           <Route path="/workload" element={<Workload />} />
           <Route path="/approvals" element={<Approvals />} />
           <Route path="/templates" element={<TaskTemplates />} />

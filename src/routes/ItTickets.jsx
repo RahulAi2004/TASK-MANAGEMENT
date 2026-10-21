@@ -11,7 +11,7 @@ import { useApi } from '../auth/AuthContext'
 const TYPE_ICON = {
   'Bug Fix': { Icon: Bug, color: '#D13438', soft: '#FDE7E9' },
   Hardware: { Icon: HardDrive, color: '#C19C00', soft: '#FFF4CE' },
-  'Access Request': { Icon: KeyRound, color: '#2564CF', soft: '#EAF1FC' },
+  'Access Request': { Icon: KeyRound, color: '#1A66E5', soft: '#EAF2FF' },
 }
 
 function slaLeft(dueAt) {

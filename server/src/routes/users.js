@@ -7,7 +7,7 @@ import { authRequired, requireRole, assignableRoleFilter } from '../lib/auth.js'
 export const usersRouter = Router()
 usersRouter.use(authRequired)
 
-const ROLE_COLOR = { ADMIN: '#2564CF', SALES: '#0F7B6C', DESIGNER: '#5B4BE6', IT: '#605E5C' }
+const ROLE_COLOR = { ADMIN: '#1A66E5', SALES: '#0F7B6C', DESIGNER: '#5B4BE6', IT: '#605E5C' }
 
 // Admin-only: invite / create a user
 const InviteSchema = z.object({

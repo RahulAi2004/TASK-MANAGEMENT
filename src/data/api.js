@@ -41,6 +41,9 @@ export const api = {
   getFile: (id, fileId) => req(`/tasks/${id}/files/${fileId}`),
   deleteFile: (id, fileId) => req(`/tasks/${id}/files/${fileId}`, { method: 'DELETE' }),
   runAi: (id) => req(`/tasks/${id}/ai/analyze`, { method: 'POST' }),
+  updateNotes: (id, body) => req(`/tasks/${id}/notes`, { method: 'PATCH', body: JSON.stringify(body) }),
+  addRecording: (id, body) => req(`/tasks/${id}/voice-notes`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteRecording: (id, noteId) => req(`/tasks/${id}/voice-notes/${noteId}`, { method: 'DELETE' }),
   comment: (id, text, audioData, audioTranscript) =>
     req(`/tasks/${id}/comments`, {
       method: 'POST',
@@ -68,6 +71,12 @@ export const api = {
   createDepartment: (payload) => req('/admin/departments', { method: 'POST', body: JSON.stringify(payload) }),
   reports: () => req('/admin/reports'),
   activity: () => req('/admin/activity'),
+  // Routine tasks (Task Settings: reusable definitions with SLA rules)
+  routines: (params = {}) => req('/routines?' + new URLSearchParams(params)),
+  createRoutine: (payload) => req('/routines', { method: 'POST', body: JSON.stringify(payload) }),
+  updateRoutine: (id, payload) => req(`/routines/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  duplicateRoutine: (id) => req(`/routines/${id}/duplicate`, { method: 'POST' }),
+  deleteRoutine: (id) => req(`/routines/${id}`, { method: 'DELETE' }),
   // Task templates (blueprints that create tasks)
   templates: (params = {}) => req('/templates?' + new URLSearchParams(params)),
   createTemplate: (payload) => req('/templates', { method: 'POST', body: JSON.stringify(payload) }),

@@ -43,10 +43,13 @@ tasksRouter.get('/stats', async (req, res) => {
   res.json({ stats: { assigned, inProgress, waiting, submitted, completedToday, overdue, total } })
 })
 
+// Filter values that cover several statuses (match the dashboard stat cards).
+const STATUS_GROUPS = { Assigned: ['Assigned', 'Accepted'], 'Waiting / On Hold': ['Waiting', 'On Hold'] }
+
 // ── List ─────────────────────────────────────────────────────────────────────
 // scope: mine (assigned to me) | team (assigned to others, admin) | delegated (created by me, assigned to others) | all (admin)
 tasksRouter.get('/', async (req, res) => {
-  const { scope = 'mine', status, q, priority, actionType } = req.query
+  const { scope = 'mine', status, q, priority, actionType, departmentId, assignedUserId, from, to, limit } = req.query
   let where = { deletedAt: null }
 
   if (scope === 'all') {
@@ -64,24 +67,37 @@ tasksRouter.get('/', async (req, res) => {
   if (status) {
     if (status === 'Overdue') {
       where = { ...where, status: { notIn: ['Completed', 'Cancelled', 'Submitted'] }, dueAt: { lt: new Date() } }
+    } else if (STATUS_GROUPS[status]) {
+      where = { ...where, status: { in: STATUS_GROUPS[status] } }
     } else {
       where = { ...where, status }
     }
   }
   if (priority) where = { ...where, priority }
   if (actionType && ['A', 'H', 'G'].includes(actionType)) where = { ...where, actionType }
+  if (departmentId) where = { ...where, departmentId }
+  // Owner filter only widens/narrows within the admin's org-wide scopes; "mine" is already pinned.
+  if (assignedUserId && req.user.role === 'ADMIN' && scope !== 'mine') where = { ...where, assignedUserId }
+  const fromTs = from ? new Date(from) : null
+  const toTs = to ? new Date(to) : null
+  if ((fromTs && !isNaN(fromTs)) || (toTs && !isNaN(toTs))) {
+    where = { ...where, createdAt: { ...(fromTs && !isNaN(fromTs) ? { gte: fromTs } : {}), ...(toTs && !isNaN(toTs) ? { lt: toTs } : {}) } }
+  }
   if (q) {
     where = {
       ...where,
-      OR: [{ title: { contains: q } }, { taskNo: { contains: q } }, { entityId: { contains: q } }],
+      // metadata holds customerName (JSON string), so a substring match finds customers too
+      OR: [{ title: { contains: q } }, { taskNo: { contains: q } }, { entityId: { contains: q } }, { metadata: { contains: q } }],
     }
   }
 
+  const take = Math.min(Math.max(Number(limit) || 100, 1), 500)
   const tasks = await db.task.findMany({
     where,
     include: listInclude,
-    orderBy: [{ dueAt: 'asc' }],
-    take: 100,
+    // soonest deadline first; tasks without a due date go to the end, newest first
+    orderBy: [{ dueAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+    take,
   })
   res.json({ tasks })
 })
@@ -97,7 +113,7 @@ tasksRouter.get('/:id', async (req, res) => {
       comments: { where: { deletedAt: null }, include: { commentedBy: userSelect }, orderBy: { createdAt: 'asc' } },
       activity: { include: { performedBy: userSelect }, orderBy: { createdAt: 'desc' } },
       history: { include: { assignedUser: userSelect }, orderBy: { assignedAt: 'asc' } },
-      voiceNotes: { orderBy: { sequenceNo: 'asc' } },
+      voiceNotes: { include: { recordedBy: userSelect }, orderBy: { sequenceNo: 'asc' } },
       aiRuns: { orderBy: { createdAt: 'desc' } },
       dependencies: { include: { dependsOnTask: { select: { id: true, taskNo: true, title: true, status: true } } } },
       dependents: { include: { task: { select: { id: true, taskNo: true, title: true, status: true } } } },
@@ -123,6 +139,9 @@ const CreateSchema = z.object({
   estimatedMinutes: z.number().int().positive().optional(),
   requiresAcceptance: z.boolean().default(false),
   affectedSystem: z.string().optional(),
+  customerName: z.string().max(160).optional(),
+  routineTaskId: z.string().optional(),
+  category: z.enum(['Order Related', 'General']).optional(),
   voiceNote: z.string().regex(/^data:audio\//, 'Voice note must be an audio data URL').max(14_000_000).optional(),
   voiceTranscript: z.string().max(4000).optional(),
   voiceNotes: z
@@ -150,6 +169,13 @@ tasksRouter.post('/', async (req, res) => {
   const assignee = await db.user.findFirst({ where: { id: data.assignedUserId, ...roleFilter } })
   if (!assignee) return res.status(403).json({ error: 'You are not allowed to assign tasks to this user' })
 
+  // Routine task: route to its department and snapshot its SLA thresholds onto the task.
+  let routine = null
+  if (data.routineTaskId) {
+    routine = await db.routineTask.findFirst({ where: { id: data.routineTaskId, isActive: true } })
+    if (!routine) return res.status(400).json({ error: 'Routine task not found or inactive' })
+  }
+
   // Year-scoped human number
   const year = new Date().getFullYear()
   const count = await db.task.count({ where: { taskNo: { startsWith: `TASK-${year}-` } } })
@@ -168,20 +194,26 @@ tasksRouter.post('/', async (req, res) => {
       priority: data.priority,
       status: 'Assigned',
       assignedUserId: assignee.id,
-      departmentId: assignee.departmentId ?? undefined,
+      departmentId: routine?.departmentId ?? assignee.departmentId ?? undefined,
+      routineTaskId: routine?.id,
+      slaCriticalMinutes: routine?.criticalMinutes,
+      slaDelayedMinutes: routine?.delayedMinutes,
       createdById: req.user.id,
       reviewerId: req.user.id,
       requiresAcceptance: data.requiresAcceptance,
       affectedSystem: data.affectedSystem,
+      metadata: data.customerName || data.category
+        ? JSON.stringify({ ...(data.customerName ? { customerName: data.customerName } : {}), ...(data.category ? { category: data.category } : {}) })
+        : undefined,
       voiceNote: data.voiceNote,
       voiceTranscript: data.voiceNote ? data.voiceTranscript : undefined,
       dueAt: data.dueAt ? new Date(data.dueAt) : undefined,
-      estimatedMinutes: data.estimatedMinutes,
+      estimatedMinutes: data.estimatedMinutes ?? routine?.normalMinutes,
       checklist: {
         create: data.checklist.map((c, i) => ({ sequenceNo: i + 1, item: c.item, isRequired: c.isRequired })),
       },
       voiceNotes: {
-        create: data.voiceNotes.map((v, i) => ({ sequenceNo: i + 1, audioData: v.audioData, transcript: v.transcript })),
+        create: data.voiceNotes.map((v, i) => ({ sequenceNo: i + 1, audioData: v.audioData, transcript: v.transcript, fileName: `Recording ${i + 1}`, recordedById: req.user.id })),
       },
     },
     include: listInclude,
@@ -349,6 +381,79 @@ tasksRouter.delete('/:id/dependencies/:depId', async (req, res) => {
   const status = await removeDependency(req.params.depId, req.user.id)
   if (status == null) return res.status(404).json({ error: 'Dependency not found' })
   res.json({ ok: true, status })
+})
+
+// ── Status note: current issue + reason for delay (Task Detail panel) ────────
+// Stored in task.metadata (JSON) alongside customerName/category; every save is audited.
+const DELAY_REASONS = [
+  'Waiting on customer', 'Waiting on another department', 'Missing information / files',
+  'Rework requested', 'Technical / system issue', 'High workload', 'Other',
+]
+const NoteSchema = z.object({
+  currentStatus: z.string().max(500).optional(),
+  delayReason: z.enum(DELAY_REASONS).optional(),
+  delayRemarks: z.string().max(500).optional(),
+})
+tasksRouter.patch('/:id/notes', async (req, res) => {
+  const p = NoteSchema.safeParse(req.body)
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid payload' })
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  if (p.data.delayReason && !p.data.delayRemarks?.trim()) return res.status(400).json({ error: 'Remarks are required with a delay reason' })
+
+  let meta = {}
+  try { meta = JSON.parse(task.metadata || '{}') } catch { meta = {} }
+  const notes = []
+  if (p.data.currentStatus !== undefined) {
+    meta.currentStatus = p.data.currentStatus.trim()
+    notes.push(`Current status: ${meta.currentStatus || '(cleared)'}`)
+  }
+  if (p.data.delayReason) {
+    meta.delay = { reason: p.data.delayReason, remarks: p.data.delayRemarks.trim(), at: new Date().toISOString(), byId: req.user.id, byName: req.user.name }
+    notes.push(`Delay reason: ${p.data.delayReason} — ${meta.delay.remarks}`)
+  }
+  if (!notes.length) return res.status(400).json({ error: 'Nothing to update' })
+
+  const updated = await db.task.update({ where: { id: task.id }, data: { metadata: JSON.stringify(meta) }, include: listInclude })
+  await db.activity.create({ data: { taskId: task.id, activityType: p.data.delayReason ? 'DelayReported' : 'StatusNote', performedById: req.user.id, notes: notes.join(' · ') } })
+  res.json({ task: updated })
+})
+
+// ── Recordings (voice notes added after creation) ────────────────────────────
+const VoiceSchema = z.object({
+  audioData: z.string().regex(/^data:audio\//, 'Recording must be an audio data URL').max(14_000_000, 'Recording must be under 10 MB'),
+  transcript: z.string().max(4000).optional(),
+  fileName: z.string().max(160).optional(),
+  durationSeconds: z.number().int().min(0).max(36_000).optional(),
+})
+tasksRouter.post('/:id/voice-notes', async (req, res) => {
+  const p = VoiceSchema.safeParse(req.body)
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid recording' })
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const last = await db.taskVoiceNote.findFirst({ where: { taskId: task.id }, orderBy: { sequenceNo: 'desc' }, select: { sequenceNo: true } })
+  const sequenceNo = (last?.sequenceNo || 0) + 1
+  const note = await db.taskVoiceNote.create({
+    data: {
+      taskId: task.id, sequenceNo, audioData: p.data.audioData, transcript: p.data.transcript,
+      fileName: p.data.fileName || `Recording ${sequenceNo}`, durationSeconds: p.data.durationSeconds, recordedById: req.user.id,
+    },
+    include: { recordedBy: userSelect },
+  })
+  await db.activity.create({ data: { taskId: task.id, activityType: 'RecordingAdded', performedById: req.user.id, notes: `Added recording ${note.fileName}` } })
+  res.status(201).json({ voiceNote: note })
+})
+tasksRouter.delete('/:id/voice-notes/:noteId', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const note = await db.taskVoiceNote.findFirst({ where: { id: req.params.noteId, taskId: task.id } })
+  if (!note) return res.status(404).json({ error: 'Recording not found' })
+  // Only the person who recorded it, the task creator, or an admin may remove a recording.
+  if (!(req.user.role === 'ADMIN' || task.createdById === req.user.id || note.recordedById === req.user.id))
+    return res.status(403).json({ error: 'You cannot delete this recording' })
+  await db.taskVoiceNote.delete({ where: { id: note.id } })
+  await db.activity.create({ data: { taskId: task.id, activityType: 'RecordingRemoved', performedById: req.user.id, notes: `Removed recording ${note.fileName || '#' + note.sequenceNo}` } })
+  res.json({ ok: true })
 })
 
 // ── Comments ─────────────────────────────────────────────────────────────────

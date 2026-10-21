@@ -2,7 +2,7 @@
 // Transcription: after recording, the audio is sent to the server's Groq Whisper
 // endpoint (handles Urdu/English code-switching). The Web Speech API provides a
 // live on-screen transcript while speaking and acts as the fallback when Groq
-// is not configured. Emits via onChange(dataUrl | null, transcript | null).
+// is not configured. Emits via onChange(dataUrl | null, transcript | null, durationSeconds).
 import { useEffect, useRef, useState } from 'react'
 import { Mic, Square, Trash2 } from 'lucide-react'
 import { api } from '../data/api'
@@ -17,7 +17,7 @@ function pickMimeType() {
 const SpeechRecognitionImpl =
   typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null
 
-export default function VoiceRecorder({ value, onChange, compact = false, lang = 'en-US' }) {
+export default function VoiceRecorder({ value, onChange, compact = false, lang = 'en-US', autoStart = false }) {
   const [recording, setRecording] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [liveText, setLiveText] = useState('')
@@ -30,6 +30,7 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
   const chunksRef = useRef([])
   const transcriptRef = useRef('')
   const timerRef = useRef(null)
+  const secondsRef = useRef(0) // duration reported with the recording (MediaRecorder webm has no reliable duration)
 
   const stopTimer = () => {
     clearInterval(timerRef.current)
@@ -86,10 +87,14 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
     try { rn.start() } catch { /* ignore */ }
   }
 
+  const startingRef = useRef(false) // guards double start (StrictMode re-runs the autoStart effect)
   const start = async () => {
+    if (startingRef.current || recordingRef.current) return
+    startingRef.current = true
     setError(null)
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setError('Recording is not supported in this browser')
+      startingRef.current = false
       return
     }
     try {
@@ -108,12 +113,13 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
           const dataUrl = reader.result
           const gen = ++generationRef.current
           // Emit immediately with the live Web Speech transcript as fallback…
-          onChange?.(dataUrl, transcriptRef.current.trim() || null)
+          const duration = secondsRef.current
+          onChange?.(dataUrl, transcriptRef.current.trim() || null, duration)
           // …then upgrade to the Groq Whisper transcript (Urdu/English mixed)
           setTranscribing(true)
           try {
             const { transcript } = await api.transcribe(dataUrl)
-            if (transcript && generationRef.current === gen) onChange?.(dataUrl, transcript)
+            if (transcript && generationRef.current === gen) onChange?.(dataUrl, transcript, duration)
           } catch {
             /* Groq not configured or failed — keep the Web Speech fallback */
           } finally {
@@ -127,15 +133,19 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
       recordingRef.current = true
       setRecording(true)
       setSeconds(0)
+      secondsRef.current = 0
       startRecognition()
       timerRef.current = setInterval(() => {
         setSeconds((s) => {
+          secondsRef.current = s + 1
           if (s + 1 >= MAX_SECONDS) stop()
           return s + 1
         })
       }, 1000)
     } catch {
       setError('Microphone access denied — allow it in browser settings')
+    } finally {
+      startingRef.current = false
     }
   }
 
@@ -153,6 +163,12 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
     setTranscribing(false)
     onChange?.(null, null)
   }
+
+  // Start straight away when opened from a "Record voice" button (one click, not two).
+  useEffect(() => {
+    if (autoStart && !value) start()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
