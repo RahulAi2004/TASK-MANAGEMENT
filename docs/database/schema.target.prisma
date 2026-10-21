@@ -1,0 +1,632 @@
+// Decoinks Task Management — TARGET database schema (v2).
+// Design rationale, ERD, data dictionary and migration plan: docs/DATABASE_DESIGN.md
+//
+// Conventions
+//   • PostgreSQL 15+. Tables/columns snake_case (@@map/@map); Prisma models stay PascalCase/camelCase.
+//   • Surrogate UUID keys for entities; natural `code` keys for admin-managed lookup tables.
+//   • Every relation is a real FOREIGN KEY. Owned children cascade with their parent; references to
+//     people/reference data RESTRICT or SET NULL (users and departments are deactivated, never deleted).
+//   • Binary content (files, audio) never lives in the database — only a storage key + metadata.
+//   • Constraints Prisma cannot express (CHECKs, partial unique indexes) live in
+//     docs/database/constraints.sql and must ship in the same migration.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enumerations (closed, code-driven value sets)
+// TaskStatus is NOT an enum: its values contain spaces ("In Progress", "On Hold") and are part of
+// the public API contract, so it is a VARCHAR guarded by a CHECK constraint (constraints.sql).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  SALES
+  DESIGNER
+  IT
+}
+
+enum Priority {
+  Urgent
+  High
+  Medium
+  Low
+}
+
+/// A = Automatic/AI · H = Human task · G = Validation Gate (manager/QA approval)
+enum ActionType {
+  A
+  H
+  G
+}
+
+enum DependencyType {
+  FinishToStart
+  StartToStart
+  FinishToFinish
+}
+
+enum CommentType {
+  Comment
+  Question
+  Answer
+  Feedback
+}
+
+enum FileKind {
+  attachment
+  reference
+  result
+  voice
+}
+
+enum VoicePurpose {
+  Instruction
+  Submission
+  Comment
+  ReviewFeedback
+}
+
+enum TranscriptStatus {
+  NotRequested
+  Pending
+  Processing
+  Completed
+  Failed
+}
+
+enum AiRunStatus {
+  Queued
+  Running
+  Completed
+  Failed
+}
+
+enum ActivityType {
+  Created
+  Assigned
+  Reassigned
+  Accepted
+  Started
+  Paused
+  Resumed
+  Waiting
+  Activated
+  Submitted
+  Approved
+  Rejected
+  Reopened
+  Cancelled
+  Commented
+  FileAdded
+  FileRemoved
+  ChecklistUpdated
+  DependencyAdded
+  DependencyRemoved
+  AiRun
+  Deleted
+}
+
+enum NotificationType {
+  Reminder
+  Assignment
+  System
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Organisation
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Department {
+  id         String   @id @default(uuid()) @db.Uuid
+  code       String   @unique @db.VarChar(40) // DESIGN, SALES, IT, QA, PROCUREMENT
+  name       String   @db.VarChar(80)
+  headUserId String?  @map("head_user_id") @db.Uuid
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  head              User?          @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
+  members           User[]         @relation("DepartmentMembers")
+  teams             Team[]
+  tasks             Task[]
+  templates         TaskTemplate[] @relation("TemplateDepartment")
+  aiFallbackTargets TaskTemplate[] @relation("TemplateAiFallback")
+
+  @@map("departments")
+}
+
+model Team {
+  id           String   @id @default(uuid()) @db.Uuid
+  departmentId String   @map("department_id") @db.Uuid
+  code         String   @db.VarChar(40)
+  name         String   @db.VarChar(80)
+  leadUserId   String?  @map("lead_user_id") @db.Uuid
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  lead       User?      @relation("TeamLead", fields: [leadUserId], references: [id], onDelete: SetNull)
+  members    User[]     @relation("TeamMembers")
+  tasks      Task[]
+
+  @@unique([departmentId, code])
+  // Composite-FK target: lets users/tasks reference (team_id, department_id) so a team can never
+  // point at a different department than the row's own department_id.
+  @@unique([id, departmentId])
+  @@map("teams")
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique @db.VarChar(254) // stored lower-cased (CHECK in constraints.sql)
+  name          String    @db.VarChar(120)
+  passwordHash  String    @map("password_hash") @db.VarChar(100)
+  role          Role
+  title         String?   @db.VarChar(80)
+  avatarColor   String    @default("#2564CF") @map("avatar_color") @db.Char(7)
+  departmentId  String?   @map("department_id") @db.Uuid
+  teamId        String?   @map("team_id") @db.Uuid
+  dailyCapacity Int       @default(8) @map("daily_capacity") @db.SmallInt // open-task capacity for the workload board
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  department Department? @relation("DepartmentMembers", fields: [departmentId], references: [id], onDelete: Restrict)
+  team       Team?       @relation("TeamMembers", fields: [teamId, departmentId], references: [id, departmentId], onDelete: Restrict)
+
+  headOfDepartments    Department[]        @relation("DepartmentHead")
+  teamsLed             Team[]              @relation("TeamLead")
+  assignedTasks        Task[]              @relation("TaskAssignee")
+  createdTasks         Task[]              @relation("TaskCreator")
+  reviewTasks          Task[]              @relation("TaskReviewer")
+  assignmentsReceived  TaskAssignment[]    @relation("AssignmentAssignee")
+  assignmentsMade      TaskAssignment[]    @relation("AssignmentAssigner")
+  checklistCompletions TaskChecklistItem[]
+  comments             Comment[]
+  uploadedFiles        TaskFile[]
+  activities           TaskActivity[]
+  notifications        Notification[]
+  templatesCreated     TaskTemplate[]
+  aiRunsTriggered      AiRun[]
+  eventsTriggered      BusinessEvent[]
+
+  @@index([departmentId])
+  @@index([teamId])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reference data (admin-managed lookups, natural keys)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Kind of business record a task is about: ARTWORK, SALES_ORDER, LEAD, SYSTEM.
+model EntityType {
+  code      String  @id @db.VarChar(40)
+  name      String  @db.VarChar(80) // "Artwork", "Sales Order"
+  refPrefix String? @map("ref_prefix") @db.VarChar(10) // "AW", "SO", "LD" — validates external refs
+  isActive  Boolean @default(true) @map("is_active")
+
+  refs      EntityRef[]
+  templates TaskTemplate[]
+
+  @@map("entity_types")
+}
+
+/// One row per external ERP record that tasks/events are about (e.g. ARTWORK / AW-2026-000125).
+/// The record itself lives in the ERP database, so it cannot be a cross-database FK; this table is
+/// the single local anchor that tasks and events join to.
+model EntityRef {
+  id             String   @id @default(uuid()) @db.Uuid
+  entityTypeCode String   @map("entity_type_code") @db.VarChar(40)
+  externalRef    String   @map("external_ref") @db.VarChar(64) // "AW-2026-000125"
+  displayName    String?  @map("display_name") @db.VarChar(255) // "Marine Family Logo"
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  entityType EntityType      @relation(fields: [entityTypeCode], references: [code], onUpdate: Cascade, onDelete: Restrict)
+  tasks      Task[]
+  events     BusinessEvent[]
+
+  @@unique([entityTypeCode, externalRef])
+  @@index([externalRef])
+  @@map("entity_refs")
+}
+
+/// Catalogue of work types: BACKGROUND_REMOVAL, PRODUCTION_ARTWORK, QA_REVIEW, BUG_FIX …
+model TaskType {
+  code              String     @id @db.VarChar(60)
+  name              String     @unique @db.VarChar(80) // "Background Removal" (display label)
+  defaultActionType ActionType @default(H) @map("default_action_type")
+  isActive          Boolean    @default(true) @map("is_active")
+
+  tasks               Task[]
+  templates           TaskTemplate[] @relation("TemplateTaskType")
+  dependentTemplates  TaskTemplate[] @relation("TemplateDependsOnType")
+
+  @@map("task_types")
+}
+
+/// Catalogue of business events the automation engine understands: PAYMENT_RECEIVED, QA_APPROVED …
+model BusinessEventType {
+  code        String  @id @db.VarChar(60)
+  name        String  @db.VarChar(120)
+  description String?
+  isActive    Boolean @default(true) @map("is_active")
+
+  templates TaskTemplate[]
+  events    BusinessEvent[]
+
+  @@map("business_event_types")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Templates & automation
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TaskTemplate {
+  id                     String    @id @default(uuid()) @db.Uuid
+  code                   String    @unique @db.VarChar(60)
+  name                   String    @db.VarChar(120) // also the default title of generated tasks
+  description            String?
+  taskTypeCode           String    @map("task_type_code") @db.VarChar(60)
+  entityTypeCode         String?   @map("entity_type_code") @db.VarChar(40)
+  departmentId           String?   @map("department_id") @db.Uuid
+  triggerEventCode       String?   @map("trigger_event_code") @db.VarChar(60)
+  dependsOnTaskTypeCode  String?   @map("depends_on_task_type_code") @db.VarChar(60)
+  priority               Priority  @default(Medium)
+  slaHours               Int?      @map("sla_hours") // due = created_at + sla_hours
+  estimatedMinutes       Int?      @map("estimated_minutes")
+  requiresReview         Boolean   @default(true) @map("requires_review")
+  requiresAcceptance     Boolean   @default(false) @map("requires_acceptance")
+  aiFirstAttempt         Boolean   @default(false) @map("ai_first_attempt")
+  aiAgentType            String?   @map("ai_agent_type") @db.VarChar(60)
+  aiMinQualityScore      Int?      @map("ai_min_quality_score") @db.SmallInt // 0–100
+  aiFallbackDepartmentId String?   @map("ai_fallback_department_id") @db.Uuid
+  isActive               Boolean   @default(true) @map("is_active")
+  createdById            String?   @map("created_by_id") @db.Uuid
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  taskType          TaskType           @relation("TemplateTaskType", fields: [taskTypeCode], references: [code], onUpdate: Cascade, onDelete: Restrict)
+  entityType        EntityType?        @relation(fields: [entityTypeCode], references: [code], onUpdate: Cascade, onDelete: Restrict)
+  department        Department?        @relation("TemplateDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  triggerEvent      BusinessEventType? @relation(fields: [triggerEventCode], references: [code], onUpdate: Cascade, onDelete: SetNull)
+  dependsOnTaskType TaskType?          @relation("TemplateDependsOnType", fields: [dependsOnTaskTypeCode], references: [code], onUpdate: Cascade, onDelete: SetNull)
+  aiFallbackDept    Department?        @relation("TemplateAiFallback", fields: [aiFallbackDepartmentId], references: [id], onDelete: SetNull)
+  createdBy         User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  checklist TemplateChecklistItem[]
+  tasks     Task[]
+
+  @@index([triggerEventCode, isActive])
+  @@map("task_templates")
+}
+
+model TemplateChecklistItem {
+  id         String  @id @default(uuid()) @db.Uuid
+  templateId String  @map("template_id") @db.Uuid
+  sequenceNo Int     @map("sequence_no") @db.SmallInt
+  item       String  @db.VarChar(255)
+  isRequired Boolean @default(true) @map("is_required")
+
+  template TaskTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, sequenceNo])
+  @@map("template_checklist_items")
+}
+
+/// Inbound business event (from the CRM bridge / ERP). Gives automation real idempotency: a
+/// re-delivered event with the same idempotency_key is rejected by the unique index instead of
+/// relying on "is there already an open task of that type?" heuristics.
+model BusinessEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  eventTypeCode  String    @map("event_type_code") @db.VarChar(60)
+  entityRefId    String    @map("entity_ref_id") @db.Uuid
+  idempotencyKey String?   @unique @map("idempotency_key") @db.VarChar(160)
+  payload        Json?
+  triggeredById  String?   @map("triggered_by_id") @db.Uuid
+  receivedAt     DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt    DateTime? @map("processed_at") @db.Timestamptz(3)
+  errorMessage   String?   @map("error_message")
+
+  eventType   BusinessEventType @relation(fields: [eventTypeCode], references: [code], onUpdate: Cascade, onDelete: Restrict)
+  entityRef   EntityRef         @relation(fields: [entityRefId], references: [id], onDelete: Restrict)
+  triggeredBy User?             @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  tasks       Task[]
+
+  @@index([entityRefId, receivedAt])
+  @@map("business_events")
+}
+
+/// Year-scoped counter for human task numbers (TASK-2026-000125). Incremented atomically with
+/// `UPDATE … SET last_value = last_value + 1 RETURNING last_value` inside the task-insert tx.
+model TaskNumberSequence {
+  year      Int @id @db.SmallInt
+  lastValue Int @default(0) @map("last_value")
+
+  @@map("task_number_sequences")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tasks
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Task {
+  id                 String     @id @default(uuid()) @db.Uuid
+  taskNo             String     @unique @map("task_no") @db.VarChar(30)
+  title              String     @db.VarChar(255)
+  subtitle           String?    @db.VarChar(255)
+  description        String?
+
+  taskTypeCode       String     @map("task_type_code") @db.VarChar(60)
+  actionType         ActionType @default(H) @map("action_type") // instance value; seeded from task_types.default_action_type
+  entityRefId        String     @map("entity_ref_id") @db.Uuid
+  priority           Priority   @default(Medium)
+  status             String     @default("Pending") @db.VarChar(20) // CHECK in constraints.sql
+
+  // Provenance — how this task came to exist (all optional; manual tasks have none set)
+  templateId         String?    @map("template_id") @db.Uuid
+  sourceEventId      String?    @map("source_event_id") @db.Uuid
+  sourceAiRunId      String?    @map("source_ai_run_id") @db.Uuid // AI-recommended task
+  parentTaskId       String?    @map("parent_task_id") @db.Uuid  // follow-up / subtask
+
+  // Ownership — current state only; the full history is in task_assignments
+  departmentId       String?    @map("department_id") @db.Uuid
+  teamId             String?    @map("team_id") @db.Uuid
+  assignedUserId     String?    @map("assigned_user_id") @db.Uuid
+  createdById        String     @map("created_by_id") @db.Uuid
+  reviewerId         String?    @map("reviewer_id") @db.Uuid
+
+  // Workflow flags — snapshot of the template at creation time (templates may change later)
+  requiresAcceptance Boolean    @default(false) @map("requires_acceptance")
+  requiresReview     Boolean    @default(true) @map("requires_review")
+  aiFirstAttempt     Boolean    @default(false) @map("ai_first_attempt")
+
+  // Schedule & lifecycle milestones (denormalised from task_activity for SLA/report queries)
+  startAfter         DateTime?  @map("start_after") @db.Timestamptz(3)
+  dueAt              DateTime?  @map("due_at") @db.Timestamptz(3)
+  estimatedMinutes   Int?       @map("estimated_minutes")
+  startedAt          DateTime?  @map("started_at") @db.Timestamptz(3)
+  submittedAt        DateTime?  @map("submitted_at") @db.Timestamptz(3)
+  completedAt        DateTime?  @map("completed_at") @db.Timestamptz(3)
+  completionSummary  String?    @map("completion_summary")
+
+  /// Type-specific, sparse, never filtered/joined on — e.g. IT tickets: { "affectedSystem": "ERP" }
+  attributes         Json?
+
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt          DateTime?  @map("deleted_at") @db.Timestamptz(3)
+
+  taskType     TaskType       @relation(fields: [taskTypeCode], references: [code], onUpdate: Cascade, onDelete: Restrict)
+  entityRef    EntityRef      @relation(fields: [entityRefId], references: [id], onDelete: Restrict)
+  template     TaskTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  sourceEvent  BusinessEvent? @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
+  sourceAiRun  AiRun?         @relation("AiRecommendedTasks", fields: [sourceAiRunId], references: [id], onDelete: SetNull)
+  parentTask   Task?          @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks     Task[]         @relation("Subtasks")
+  department   Department?    @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  team         Team?          @relation(fields: [teamId, departmentId], references: [id, departmentId], onDelete: Restrict)
+  assignedUser User?          @relation("TaskAssignee", fields: [assignedUserId], references: [id], onDelete: Restrict)
+  createdBy    User           @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  reviewer     User?          @relation("TaskReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+
+  assignments   TaskAssignment[]
+  checklist     TaskChecklistItem[]
+  comments      Comment[]
+  files         TaskFile[]
+  aiRuns        AiRun[]            @relation("TaskAiRuns")
+  activity      TaskActivity[]
+  notifications Notification[]
+  dependencies  TaskDependency[]   @relation("Dependent")    // tasks this one WAITS ON
+  dependents    TaskDependency[]   @relation("Prerequisite") // tasks WAITING ON this one
+
+  @@index([assignedUserId, status])
+  @@index([createdById, status])
+  @@index([reviewerId, status])
+  @@index([departmentId, status])
+  @@index([status, dueAt])
+  @@index([entityRefId, taskTypeCode])
+  @@index([parentTaskId])
+  @@index([templateId])
+  @@index([completedAt])
+  @@map("tasks")
+}
+
+/// Assignment log: one row per hand-over. The open row (released_at IS NULL) is the current
+/// assignment and must match tasks.assigned_user_id (partial unique index in constraints.sql).
+/// "Previous assignee" is the prior row — not stored again.
+model TaskAssignment {
+  id           String    @id @default(uuid()) @db.Uuid
+  taskId       String    @map("task_id") @db.Uuid
+  assigneeId   String    @map("assignee_id") @db.Uuid
+  assignedById String?   @map("assigned_by_id") @db.Uuid // null = system/automation
+  reason       String?   @db.VarChar(500)
+  assignedAt   DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  acceptedAt   DateTime? @map("accepted_at") @db.Timestamptz(3)
+  releasedAt   DateTime? @map("released_at") @db.Timestamptz(3)
+
+  task       Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee   User  @relation("AssignmentAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("AssignmentAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([taskId, assignedAt])
+  @@index([assigneeId, assignedAt])
+  @@map("task_assignments")
+}
+
+/// Completion is expressed once: completed ⇔ completed_at IS NOT NULL (API exposes isCompleted).
+model TaskChecklistItem {
+  id            String    @id @default(uuid()) @db.Uuid
+  taskId        String    @map("task_id") @db.Uuid
+  sequenceNo    Int       @map("sequence_no") @db.SmallInt
+  item          String    @db.VarChar(255)
+  isRequired    Boolean   @default(true) @map("is_required")
+  completedById String?   @map("completed_by_id") @db.Uuid
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz(3)
+  notes         String?
+
+  task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  completedBy User? @relation(fields: [completedById], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, sequenceNo])
+  @@map("task_checklist_items")
+}
+
+model Comment {
+  id              String      @id @default(uuid()) @db.Uuid
+  taskId          String      @map("task_id") @db.Uuid
+  parentCommentId String?     @map("parent_comment_id") @db.Uuid
+  commentType     CommentType @default(Comment) @map("comment_type")
+  body            String?     // null for a voice-only comment (audio is a VoiceNote with purpose=Comment)
+  authorId        String      @map("author_id") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime?   @map("deleted_at") @db.Timestamptz(3)
+
+  task          Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  parentComment Comment?    @relation("CommentThread", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       Comment[]   @relation("CommentThread")
+  author        User        @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  voiceNotes    VoiceNote[]
+
+  @@index([taskId, createdAt])
+  @@index([parentCommentId])
+  @@map("task_comments")
+}
+
+/// Every binary that belongs to a task — attachments, references, results, AI outputs, audio.
+/// Bytes live in object storage (S3/Azure Blob; local disk in dev) under storage_key.
+model TaskFile {
+  id           String    @id @default(uuid()) @db.Uuid
+  taskId       String    @map("task_id") @db.Uuid
+  kind         FileKind  @default(attachment)
+  fileName     String    @map("file_name") @db.VarChar(255)
+  mimeType     String?   @map("mime_type") @db.VarChar(120)
+  sizeBytes    BigInt    @map("size_bytes")
+  sha256       String?   @db.Char(64)
+  storageKey   String    @unique @map("storage_key") @db.VarChar(512)
+  uploadedById String?   @map("uploaded_by_id") @db.Uuid // null = produced by AI/system
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy   User?      @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  voiceNote    VoiceNote?
+  aiRunsInput  AiRun[]    @relation("AiRunInput")
+  aiRunsOutput AiRun[]    @relation("AiRunOutput")
+
+  @@index([taskId, kind, createdAt])
+  @@map("task_files")
+}
+
+/// Audio-specific facts for a TaskFile of kind=voice (1:1, keyed by the file).
+/// task, recorder and created time come from the file row — not repeated here.
+model VoiceNote {
+  fileId           String           @id @map("file_id") @db.Uuid
+  purpose          VoicePurpose     @default(Instruction)
+  commentId        String?          @map("comment_id") @db.Uuid // set when purpose = Comment
+  durationSeconds  Int?             @map("duration_seconds")
+  transcript       String?
+  transcriptStatus TranscriptStatus @default(NotRequested) @map("transcript_status")
+  languageCode     String?          @map("language_code") @db.VarChar(10)
+
+  file    TaskFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([commentId])
+  @@map("task_voice_notes")
+}
+
+/// Task waits on a predecessor. Self-edges are blocked by CHECK; longer cycles by the app
+/// (recursive-CTE check before insert, see DATABASE_DESIGN.md §6).
+model TaskDependency {
+  id              String         @id @default(uuid()) @db.Uuid
+  taskId          String         @map("task_id") @db.Uuid
+  dependsOnTaskId String         @map("depends_on_task_id") @db.Uuid
+  dependencyType  DependencyType @default(FinishToStart) @map("dependency_type")
+  isMandatory     Boolean        @default(true) @map("is_mandatory")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task          Task @relation("Dependent", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnTask Task @relation("Prerequisite", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@index([dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+model AiRun {
+  id              String      @id @default(uuid()) @db.Uuid
+  taskId          String      @map("task_id") @db.Uuid
+  agentType       String      @map("agent_type") @db.VarChar(60) // "Artwork Analyzer", "Background Remover"
+  modelName       String?     @map("model_name") @db.VarChar(80)
+  runStatus       AiRunStatus @default(Queued) @map("run_status")
+  inputFileId     String?     @map("input_file_id") @db.Uuid
+  outputFileId    String?     @map("output_file_id") @db.Uuid // AI output is ALWAYS a new file, never overwrites input
+  confidenceScore Decimal?    @map("confidence_score") @db.Decimal(5, 4) // 0.0000–1.0000
+  qualityScore    Decimal?    @map("quality_score") @db.Decimal(5, 4)
+  similarityScore Decimal?    @map("similarity_score") @db.Decimal(5, 4)
+  findings        Json?       // width, height, dpi, hasAlpha, issues[] …
+  resultSummary   String?     @map("result_summary")
+  errorMessage    String?     @map("error_message")
+  triggeredById   String?     @map("triggered_by_id") @db.Uuid
+  startedAt       DateTime?   @map("started_at") @db.Timestamptz(3)
+  completedAt     DateTime?   @map("completed_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task             Task      @relation("TaskAiRuns", fields: [taskId], references: [id], onDelete: Cascade)
+  inputFile        TaskFile? @relation("AiRunInput", fields: [inputFileId], references: [id], onDelete: SetNull)
+  outputFile       TaskFile? @relation("AiRunOutput", fields: [outputFileId], references: [id], onDelete: SetNull)
+  triggeredBy      User?     @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  recommendedTasks Task[]    @relation("AiRecommendedTasks")
+
+  @@index([taskId, createdAt])
+  @@map("task_ai_runs")
+}
+
+/// Immutable audit trail. Every status change writes exactly one row (old_status → new_status).
+model TaskActivity {
+  id            String       @id @default(uuid()) @db.Uuid
+  taskId        String       @map("task_id") @db.Uuid
+  activityType  ActivityType @map("activity_type")
+  oldStatus     String?      @map("old_status") @db.VarChar(20)
+  newStatus     String?      @map("new_status") @db.VarChar(20)
+  performedById String?      @map("performed_by_id") @db.Uuid // null = system/automation
+  notes         String?
+  details       Json?
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  performedBy User? @relation(fields: [performedById], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+  @@index([createdAt])
+  @@map("task_activity")
+}
+
+/// Read state is expressed once: unread ⇔ read_at IS NULL.
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  recipientId String           @map("recipient_id") @db.Uuid
+  taskId      String?          @map("task_id") @db.Uuid
+  type        NotificationType @default(System)
+  message     String           @db.VarChar(500)
+  readAt      DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recipient User  @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  task      Task? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([taskId, recipientId, type, createdAt]) // overdue-reminder de-dup lookup
+  @@map("notifications")
+}
