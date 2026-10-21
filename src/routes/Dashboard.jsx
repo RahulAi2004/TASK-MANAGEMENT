@@ -149,7 +149,7 @@ function Upcoming({ tasks }) {
         {soon.map((t) => (
           <li key={t.id} className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <Link to={'/task/' + t.id} className="text-sm font-medium text-ink hover:text-accent">{t.title}</Link>
+              <Link to={'/?task=' + t.id} className="text-sm font-medium text-ink hover:text-accent">{t.title}</Link>
               <div className="text-xs text-ink-tertiary">{t.taskNo} · {t.assignedUser?.name}</div>
             </div>
             <div className="whitespace-nowrap text-right text-xs text-ink-secondary">
@@ -177,7 +177,7 @@ function Escalations({ tasks }) {
           <li key={t.id} className="flex gap-3">
             <AlertCircle size={17} className="mt-0.5 shrink-0 text-status-danger" />
             <div className="min-w-0">
-              <Link to={'/task/' + t.id} className="text-sm font-medium text-ink hover:text-accent">{t.title}</Link>
+              <Link to={'/?task=' + t.id} className="text-sm font-medium text-ink hover:text-accent">{t.title}</Link>
               <div className="text-xs text-ink-secondary">{t.taskNo} · {t.assignedUser?.name}</div>
             </div>
           </li>

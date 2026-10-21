@@ -42,7 +42,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [form, setForm] = useState({
-    title: '', taskType: TASK_TYPES[0], priority: 'High',
+    title: '', taskType: '', priority: 'High',
     entityType: 'Artwork', entityId: '', assignedUserId: '',
     category: 'General', customerName: '', routineTaskId: '',
     dueAt: '', estimatedMinutes: '', description: '',
@@ -203,7 +203,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
             </button>
             <button
               onClick={submit}
-              disabled={busy || !form.title || !form.assignedUserId}
+              disabled={busy || !form.title || !form.taskType || !form.assignedUserId}
               className="focus-ring rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
             >
               {busy ? 'Creating…' : saveAsTemplate ? 'Create Task + Template' : 'Create Task'}
@@ -262,6 +262,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 </Field>
                 <Field label="Work Type" required>
                   <select className={inputCls} value={form.taskType} onChange={set('taskType')}>
+                    <option value="">Select work type</option>
                     {TASK_TYPES.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </Field>

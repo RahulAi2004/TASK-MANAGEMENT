@@ -4,7 +4,7 @@ export function CategoryChip({ category }) {
   const s = CATEGORY_STYLE[category] || CATEGORY_STYLE.General
   return (
     <span
-      className="inline-flex whitespace-nowrap rounded-chip border px-2 py-1 text-[11px] font-medium"
+      className="inline-flex whitespace-nowrap rounded-chip border px-1 py-0.5 text-[10px] font-medium"
       style={{ background: s.bg, color: s.fg, borderColor: s.fg + '26' }}
     >
       {category}
@@ -18,7 +18,7 @@ export function SlaChip({ status }) {
   return (
     <span
       title={s.hint}
-      className="inline-flex whitespace-nowrap rounded-chip border px-2 py-1 text-[11px] font-medium"
+      className="inline-flex whitespace-nowrap rounded-chip border px-1 py-0.5 text-[10px] font-medium"
       style={{ background: s.bg, color: s.fg, borderColor: s.fg + '33' }}
     >
       {status}

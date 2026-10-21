@@ -24,7 +24,7 @@ function QueueRow({ t, onChanged }) {
 
   return (
     <Link
-      to={'/task/' + t.id}
+      to={'/all-tasks?task=' + t.id}
       className="group flex items-center gap-4 border-b border-border px-5 py-3.5 last:border-0 hover:bg-subtle"
     >
       {/* MS To Do circular check */}
@@ -86,7 +86,7 @@ export default function DesignerQueue({ filter = 'queue', title = 'My Queue' }) 
     <AppShell title={title} subtitle="Accept, work, and submit — one task at a time" onTasksChanged={reload}>
       {inProgress && filter === 'queue' && (
         <Link
-          to={'/task/' + inProgress.id}
+          to={'/all-tasks?task=' + inProgress.id}
           className="mb-5 flex items-center justify-between rounded-card border border-accent-softborder bg-accent-soft px-5 py-4 shadow-card transition-transform hover:-translate-y-0.5"
         >
           <div>

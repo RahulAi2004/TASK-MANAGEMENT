@@ -25,7 +25,7 @@ const RANGES = [
   { key: 'month', label: 'This month' },
   { key: '30d', label: 'Last 30 days' },
 ]
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 const DEFAULTS = { category: 'All', module: 'All', status: 'All', sla: 'All', owner: 'All', range: 'all' }
 
 function rangeStart(key) {
@@ -36,6 +36,45 @@ function rangeStart(key) {
   if (key === 'month') { d.setDate(1); return d }
   if (key === '30d') { d.setDate(d.getDate() - 29); return d }
   return null
+}
+
+// Page buttons: always first + last, the current page and its neighbours, "…" for gaps.
+function pageList(current, pages) {
+  const want = new Set([1, pages, current - 1, current, current + 1].filter((p) => p >= 1 && p <= pages))
+  const out = []
+  ;[...want].sort((a, b) => a - b).forEach((p, i, arr) => {
+    if (i && p - arr[i - 1] > 1) out.push('gap-' + p)
+    out.push(p)
+  })
+  return out
+}
+
+function Pager({ current, pages, onPage }) {
+  const btn = 'focus-ring grid h-8 min-w-8 place-items-center rounded-control px-2 text-sm tabular-nums'
+  return (
+    <nav className="flex items-center gap-1" aria-label="Pagination">
+      <button onClick={() => onPage(current - 1)} disabled={current === 1} title="Previous page" className={btn + ' text-ink-secondary hover:bg-subtle disabled:opacity-40'}>
+        <ChevronLeft size={16} />
+      </button>
+      {pageList(current, pages).map((p) =>
+        typeof p === 'string' ? (
+          <span key={p} className="px-1 text-ink-tertiary">…</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onPage(p)}
+            aria-current={p === current ? 'page' : undefined}
+            className={btn + (p === current ? ' bg-accent font-semibold text-white' : ' text-ink-secondary hover:bg-subtle')}
+          >
+            {p}
+          </button>
+        )
+      )}
+      <button onClick={() => onPage(current + 1)} disabled={current === pages} title="Next page" className={btn + ' text-ink-secondary hover:bg-subtle disabled:opacity-40'}>
+        <ChevronRight size={16} />
+      </button>
+    </nav>
+  )
 }
 
 function Select({ label, value, onChange, children, icon: Icon }) {
@@ -223,32 +262,12 @@ export default function AllTasks() {
               <div className="border-t border-border">
                 <TaskGrid tasks={pageRows} now={now} selectedId={selectedId} onOpen={openTask} />
               </div>
-              <div className="flex items-center justify-between border-t border-border px-5 py-3 text-sm text-ink-secondary">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-sm text-ink-secondary">
                 <span>
                   Showing {(current - 1) * PAGE_SIZE + 1} to {Math.min(current * PAGE_SIZE, rows.length)} of {rows.length} tasks
                   {all.length >= 500 && <span className="text-ink-tertiary"> (first 500 — narrow the filters to see more)</span>}
                 </span>
-                {pages > 1 && (
-                  <span className="flex items-center gap-1">
-                    <button
-                      onClick={() => setPage(current - 1)}
-                      disabled={current === 1}
-                      className="focus-ring grid h-8 w-8 place-items-center rounded-control hover:bg-subtle disabled:opacity-40"
-                      title="Previous page"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-                    <span className="px-1 tabular-nums">{current} / {pages}</span>
-                    <button
-                      onClick={() => setPage(current + 1)}
-                      disabled={current === pages}
-                      className="focus-ring grid h-8 w-8 place-items-center rounded-control hover:bg-subtle disabled:opacity-40"
-                      title="Next page"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  </span>
-                )}
+                {pages > 1 && <Pager current={current} pages={pages} onPage={setPage} />}
               </div>
             </>
           )}

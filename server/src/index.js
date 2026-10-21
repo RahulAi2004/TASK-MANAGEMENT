@@ -3,6 +3,9 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
+// Rejected promises in async route handlers reach the central error handler (Express 4 doesn't do this
+// on its own — a failed query would otherwise leave the request hanging with no response).
+import 'express-async-errors'
 import cors from 'cors'
 import { authRouter } from './routes/auth.js'
 import { usersRouter } from './routes/users.js'

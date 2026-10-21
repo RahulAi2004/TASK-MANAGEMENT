@@ -20,7 +20,7 @@ export default function StatusBadge({ status, size = 'md' }) {
     <span
       className={
         'inline-flex items-center whitespace-nowrap rounded-chip border font-medium ' +
-        (size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs')
+        (size === 'sm' ? 'px-1.5 py-0.5 text-[10.5px]' : 'px-2.5 py-1 text-xs')
       }
       style={{ background: s.bg, color: s.fg, borderColor: s.fg + '33' }}
     >

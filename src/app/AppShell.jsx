@@ -17,7 +17,7 @@ export default function AppShell({ title, subtitle, children, onTasksChanged, ac
       <TopBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
-        <main className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
+        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-5">
           {title && (
             <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">

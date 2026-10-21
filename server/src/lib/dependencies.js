@@ -38,9 +38,16 @@ export async function onTaskCompleted(taskId) {
 // Create a dependency edge (idempotent), then gate the dependent. Guards against self/cycle.
 export async function addDependency(taskId, dependsOnTaskId, actorId = null) {
   if (taskId === dependsOnTaskId) throw new Error('A task cannot depend on itself')
-  // simple 1-level cycle guard: the prerequisite must not already depend on this task
-  const back = await db.taskDependency.findFirst({ where: { taskId: dependsOnTaskId, dependsOnTaskId: taskId } })
-  if (back) throw new Error('That would create a circular dependency')
+  // Cycle guard over the whole chain: walk everything the prerequisite (transitively) waits on;
+  // if this task is among them, the new edge would close a loop and every task in it would wait forever.
+  const seen = new Set()
+  let frontier = [dependsOnTaskId]
+  while (frontier.length) {
+    if (frontier.includes(taskId)) throw new Error('That would create a circular dependency')
+    frontier.forEach((id) => seen.add(id))
+    const next = await db.taskDependency.findMany({ where: { taskId: { in: frontier } }, select: { dependsOnTaskId: true } })
+    frontier = [...new Set(next.map((d) => d.dependsOnTaskId))].filter((id) => !seen.has(id))
+  }
   await db.taskDependency.upsert({
     where: { taskId_dependsOnTaskId: { taskId, dependsOnTaskId } },
     update: {}, create: { taskId, dependsOnTaskId },

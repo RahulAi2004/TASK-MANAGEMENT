@@ -75,6 +75,7 @@ export function fmtDuration(ms) {
   const h = Math.floor(totalMin / 60)
   const m = totalMin % 60
   if (!h) return `${m}m`
+  if (h >= 48) return `${Math.floor(h / 24)}d ${h % 24}h` // "49d 0h" reads better than "1176h 37m"
   return m ? `${h}h ${String(m).padStart(2, '0')}m` : `${h}h`
 }
 
@@ -139,3 +140,8 @@ export const DELAY_REASONS = [
   'High workload',
   'Other',
 ]
+
+/** Where a task opens: the Task Management page with its side panel (admin home is "/"). */
+export function taskPanelPath(user, id) {
+  return (user?.role === 'ADMIN' ? '/' : '/all-tasks') + '?task=' + id
+}

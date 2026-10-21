@@ -2,7 +2,8 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import PriorityFlag from './PriorityFlag'
-import { initials } from '../../auth/AuthContext'
+import { taskPanelPath } from './taskMeta'
+import { initials, useAuth } from '../../auth/AuthContext'
 
 // A/H/G work-type badge. A = Automatic/AI · H = Human task · G = Validation Gate (manager approval).
 const ACTION_META = {
@@ -50,6 +51,7 @@ export function isOverdue(t) {
 
 export default function TaskTable({ tasks, showAssignee = false, showCreator = false, showDept = false, showAssignedOn = false, emptyText = 'No tasks' }) {
   const navigate = useNavigate()
+  const { user } = useAuth()
   if (!tasks?.length) {
     return <div className="px-5 py-10 text-center text-sm text-ink-tertiary">{emptyText}</div>
   }
@@ -78,7 +80,7 @@ export default function TaskTable({ tasks, showAssignee = false, showCreator = f
             return (
               <tr
                 key={t.id}
-                onClick={() => navigate('/task/' + t.id)}
+                onClick={() => navigate(taskPanelPath(user, t.id))}
                 className="cursor-pointer border-b border-border last:border-0 hover:bg-subtle"
               >
                 <td className="px-5 py-3 text-sm font-medium text-accent">{t.taskNo}</td>

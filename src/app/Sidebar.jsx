@@ -35,8 +35,8 @@ export default function Sidebar() {
   const nav = NAV_BY_ROLE[user.role] || []
 
   return (
-    <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-app md:flex">
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2.5 py-4">
+    <aside className="hidden w-48 shrink-0 flex-col border-r border-border bg-app md:flex">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
         {nav.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -44,7 +44,7 @@ export default function Sidebar() {
             end={end}
             className={({ isActive }) =>
               [
-                'focus-ring flex items-center gap-3 rounded-control px-3 py-2.5 text-[15px] transition-colors',
+                'focus-ring flex items-center gap-2.5 whitespace-nowrap rounded-control px-2.5 py-2.5 text-[14px] transition-colors',
                 isActive ? 'bg-accent-soft font-semibold text-accent' : 'text-ink-secondary hover:bg-subtle hover:text-ink',
               ].join(' ')
             }

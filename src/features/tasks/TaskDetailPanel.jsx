@@ -40,7 +40,7 @@ function Avatar({ u, size = 26 }) {
 
 function Row({ label, children }) {
   return (
-    <div className="grid min-h-[34px] grid-cols-[84px_1fr] items-center gap-2 py-1">
+    <div className="grid min-h-[34px] grid-cols-[78px_1fr] items-center gap-2 py-1">
       <span className="text-[13px] text-ink-secondary">{label}</span>
       <span className="min-w-0 text-[13px] text-ink">{children}</span>
     </div>
@@ -320,28 +320,36 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
               <Row label="Priority"><PriorityFlag priority={t.priority} /></Row>
             </div>
             <div className="sm:pl-4">
-              <Row label="Owner">
-                {t.assignedUser ? (
-                  <span className="flex items-center gap-1.5"><Avatar u={t.assignedUser} /> <span className="leading-tight">{t.assignedUser.name}</span></span>
-                ) : 'Unassigned'}
-              </Row>
-              <Row label="Assigned by">
-                <span className="flex items-center gap-1.5"><Avatar u={t.createdBy} /> <span className="leading-tight">{t.createdBy?.name}</span></span>
-              </Row>
               <Row label="Task Status"><StatusBadge status={t.status} size="sm" /></Row>
               <Row label="Created at">
-                <span className="block leading-tight">{fmtDate(t.createdAt)}</span>
+                <span className="block whitespace-nowrap leading-tight">{fmtDate(t.createdAt)}</span>
                 <span className="block text-xs leading-tight text-ink-secondary">{fmtTime(t.createdAt)}</span>
               </Row>
               <Row label="Due at">
                 {t.dueAt ? (
                   <span className={sla === 'Delayed' && isOpen ? 'font-medium text-status-danger' : ''}>
-                    <span className="block leading-tight">{fmtDate(t.dueAt)}</span>
+                    <span className="block whitespace-nowrap leading-tight">{fmtDate(t.dueAt)}</span>
                     <span className="block text-xs leading-tight opacity-80">{fmtTime(t.dueAt)}</span>
                   </span>
                 ) : '—'}
               </Row>
             </div>
+          </div>
+          {/* People get a full-width row: names are often too long for half the panel. */}
+          <div className="mt-2 grid grid-cols-2 gap-3 border-t border-border pt-3">
+            {[['Owner', t.assignedUser], ['Assigned by', t.createdBy]].map(([label, u]) => (
+              <div key={label} className="min-w-0">
+                <div className="mb-1 text-[13px] text-ink-secondary">{label}</div>
+                {u ? (
+                  <div className="flex items-center gap-2">
+                    <Avatar u={u} />
+                    <span className="min-w-0 break-words text-[13px] leading-tight text-ink">{u.name}</span>
+                  </div>
+                ) : (
+                  <span className="text-[13px] text-ink-tertiary">Unassigned</span>
+                )}
+              </div>
+            ))}
           </div>
         </section>
 
@@ -556,8 +564,8 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-30 bg-black/20 xl:hidden" onClick={onClose} />
-      <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[480px] flex-col border-l border-border bg-app shadow-pop xl:static xl:z-auto xl:w-[480px] xl:max-w-none xl:shadow-none">
+      <div className="fixed inset-0 z-30 bg-black/20 min-[1500px]:hidden" onClick={onClose} />
+      <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-border bg-app shadow-pop min-[1500px]:static min-[1500px]:z-auto min-[1500px]:w-[420px] min-[1500px]:max-w-none min-[1500px]:shadow-none">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-5">
           <h2 className="text-lg font-semibold text-ink">Task Detail</h2>
           <button onClick={onClose} title="Close" className="focus-ring grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle">

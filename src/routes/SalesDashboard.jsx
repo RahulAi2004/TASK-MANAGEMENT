@@ -23,7 +23,7 @@ function DelegatedRow({ t, onRemind }) {
   }
   return (
     <div
-      onClick={() => navigate('/task/' + t.id)}
+      onClick={() => navigate('/all-tasks?task=' + t.id)}
       className="flex cursor-pointer items-center gap-3 border-b border-border px-5 py-3 last:border-0 hover:bg-subtle"
     >
       <span

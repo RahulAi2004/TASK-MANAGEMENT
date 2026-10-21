@@ -5,6 +5,7 @@ import { authRequired, assignableRoleFilter, requireRole } from '../lib/auth.js'
 import { canPerform } from '../lib/stateMachine.js'
 import { addDependency, removeDependency, onTaskCompleted } from '../lib/dependencies.js'
 import { runArtworkAnalysis } from '../lib/ai.js'
+import { withTaskNo } from '../lib/templates.js'
 
 export const tasksRouter = Router()
 tasksRouter.use(authRequired)
@@ -210,12 +211,8 @@ tasksRouter.post('/', async (req, res) => {
     if (!routine) return res.status(400).json({ error: 'Routine task not found or inactive' })
   }
 
-  // Year-scoped human number
-  const year = new Date().getFullYear()
-  const count = await db.task.count({ where: { taskNo: { startsWith: `TASK-${year}-` } } })
-  const taskNo = `TASK-${year}-${String(count + 108 + 20).padStart(5, '0')}`
-
-  const task = await db.task.create({
+  // Year-scoped human number (unique; retried if a simultaneous create took it)
+  const task = await withTaskNo((taskNo) => db.task.create({
     data: {
       taskNo,
       title: data.title,
@@ -256,7 +253,7 @@ tasksRouter.post('/', async (req, res) => {
       },
     },
     include: listInclude,
-  })
+  }))
   await db.assignmentHistory.create({
     data: { taskId: task.id, assignedUserId: assignee.id, assignedById: req.user.id, reason: 'Initial assignment' },
   })
@@ -331,6 +328,9 @@ tasksRouter.post('/:id/transition', async (req, res) => {
   if (event === 'approve') patch.completedAt = nowTs
 
   const updated = await db.task.update({ where: { id: task.id }, data: patch, include: listInclude })
+  if (event === 'accept') {
+    await db.assignmentHistory.updateMany({ where: { taskId: task.id, releasedAt: null, acceptedAt: null }, data: { acceptedAt: nowTs } })
+  }
   await db.activity.create({
     data: {
       taskId: task.id, activityType: t.activityType,
@@ -370,6 +370,8 @@ tasksRouter.post('/:id/assign', async (req, res) => {
     data: { assignedUserId: assignee.id, departmentId: assignee.departmentId ?? task.departmentId, status },
     include: listInclude,
   })
+  // Close the previous assignment so history shows how long each person held the task.
+  await db.assignmentHistory.updateMany({ where: { taskId: task.id, releasedAt: null }, data: { releasedAt: new Date() } })
   await db.assignmentHistory.create({
     data: { taskId: task.id, previousUserId: prev, assignedUserId: assignee.id, assignedById: req.user.id, reason: p.data.reason || (prev ? 'Reassigned' : 'Assigned') },
   })
@@ -409,8 +411,11 @@ tasksRouter.get('/:id/files/:fileId', async (req, res) => {
 tasksRouter.delete('/:id/files/:fileId', async (req, res) => {
   const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
   if (!task) return res.status(404).json({ error: 'Task not found' })
-  try { await db.taskFile.delete({ where: { id: req.params.fileId } }); res.json({ ok: true }) }
-  catch { res.status(404).json({ error: 'File not found' }) }
+  // Scoped to this task, so a file on another task can't be deleted through this URL.
+  const { count } = await db.taskFile.deleteMany({ where: { id: req.params.fileId, taskId: task.id } })
+  if (!count) return res.status(404).json({ error: 'File not found' })
+  await db.activity.create({ data: { taskId: task.id, activityType: 'FileRemoved', performedById: req.user.id } })
+  res.json({ ok: true })
 })
 
 // ── Vault artworks (sent over from Design Studio) ────────────────────────────
@@ -603,8 +608,11 @@ tasksRouter.patch('/:id/checklist/:itemId', async (req, res) => {
   })
   if (!task) return res.status(404).json({ error: 'Task not found' })
   const done = Boolean(req.body?.isCompleted)
+  // The item must belong to this task — otherwise any visible task could be used to edit another's checklist.
+  const owned = await db.checklistItem.findFirst({ where: { id: req.params.itemId, taskId: task.id }, select: { id: true } })
+  if (!owned) return res.status(404).json({ error: 'Checklist item not found' })
   const item = await db.checklistItem.update({
-    where: { id: req.params.itemId },
+    where: { id: owned.id },
     data: {
       isCompleted: done,
       completedById: done ? req.user.id : null,

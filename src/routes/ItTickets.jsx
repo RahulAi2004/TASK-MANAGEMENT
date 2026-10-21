@@ -40,7 +40,7 @@ function TicketRow({ t, onChanged }) {
 
   return (
     <Link
-      to={'/task/' + t.id}
+      to={'/all-tasks?task=' + t.id}
       className="flex items-center gap-4 border-b border-border px-5 py-4 last:border-0 hover:bg-subtle"
     >
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ background: meta.soft }}>

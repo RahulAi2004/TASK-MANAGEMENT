@@ -3,11 +3,27 @@
 import { db } from './db.js'
 import { addDependency } from './dependencies.js'
 
-// Year-scoped human task number, e.g. TASK-2026-00128 (same scheme as manual create).
+// Year-scoped human task number, e.g. TASK-2026-00128. Next = highest number issued this year + 1,
+// so a number is never reused (a row count would reissue numbers after deletions).
 export async function nextTaskNo() {
   const year = new Date().getFullYear()
-  const count = await db.task.count({ where: { taskNo: { startsWith: `TASK-${year}-` } } })
-  return `TASK-${year}-${String(count + 128).padStart(5, '0')}`
+  const prefix = `TASK-${year}-`
+  const last = await db.task.findFirst({ where: { taskNo: { startsWith: prefix } }, orderBy: { taskNo: 'desc' }, select: { taskNo: true } })
+  const n = last ? parseInt(last.taskNo.slice(prefix.length), 10) + 1 : 128
+  return prefix + String(n).padStart(5, '0')
+}
+
+// Two tasks created at the same moment can pick the same number; the unique index rejects the
+// second insert, so retry it with a fresh number instead of failing the request.
+export async function withTaskNo(create, attempts = 5) {
+  for (let i = 1; ; i++) {
+    try {
+      return await create(await nextTaskNo())
+    } catch (e) {
+      const taskNoClash = e?.code === 'P2002' && String(e?.meta?.target).includes('taskNo')
+      if (!taskNoClash || i >= attempts) throw e
+    }
+  }
 }
 
 // template : a TaskTemplate row
@@ -24,8 +40,7 @@ export async function createTaskFromTemplate(template, opts) {
     ? new Date(dueAt)
     : (template.slaHours != null ? new Date(Date.now() + template.slaHours * 3600_000) : undefined)
 
-  const taskNo = await nextTaskNo()
-  const task = await db.task.create({
+  const task = await withTaskNo((taskNo) => db.task.create({
     data: {
       taskNo,
       title: template.name,
@@ -54,7 +69,7 @@ export async function createTaskFromTemplate(template, opts) {
         })),
       },
     },
-  })
+  }))
 
   if (assignee) {
     await db.assignmentHistory.create({
