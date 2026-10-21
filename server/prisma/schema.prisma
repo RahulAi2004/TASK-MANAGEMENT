@@ -109,7 +109,10 @@ model Notification {
   type      String   @default("Reminder") // Reminder | System
   message   String
   isRead    Boolean  @default(false)
+  dedupeKey String?  // set on SLA alerts pushed from Printshop, so a re-delivered alert lands once
   createdAt DateTime @default(now())
+
+  @@index([dedupeKey])
 }
 
 model Task {
