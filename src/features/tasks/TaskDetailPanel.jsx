@@ -282,6 +282,21 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
 
         {err && <div className="rounded-control bg-status-dangersoft px-3 py-2 text-sm text-status-danger">{err}</div>}
 
+        {isOpen && (sla === 'Delayed' || sla === 'Critical') && (
+          <div
+            className="flex items-start gap-3 rounded-card border px-3.5 py-3 md:hidden"
+            style={sla === 'Delayed' ? { background: '#FDECEE', borderColor: '#F6C6CB', color: '#D13438' } : { background: '#FFF4E5', borderColor: '#FBD9AE', color: '#C25E00' }}
+          >
+            <AlertCircle size={22} className="mt-0.5 shrink-0" />
+            <div className="text-[13px] leading-snug">
+              <div className="text-[15px] font-semibold">{sla}</div>
+              {meta.delay
+                ? <>Reason recorded: {meta.delay.reason}</>
+                : sla === 'Delayed' ? 'Task is delayed. Please provide a reason.' : 'Task is close to its SLA limit.'}
+            </div>
+          </div>
+        )}
+
         {/* SLA · elapsed · normal */}
         <div className="grid grid-cols-3 divide-x divide-border rounded-card border border-border bg-surface py-3 text-center">
           <div className="px-2">
@@ -451,8 +466,12 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
         {/* Recordings */}
         <section className={card}>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-[15px] font-semibold text-ink">Recordings ({recordings.length})</h3>
-            <div className="flex gap-2">
+            <h3 className="flex items-center gap-1.5 text-[15px] font-semibold text-ink">
+              <Mic size={16} className="text-accent md:hidden" />
+              <span className="md:hidden">Voice Recordings ({recordings.length})</span>
+              <span className="hidden md:inline">Recordings ({recordings.length})</span>
+            </h3>
+            <div className="hidden gap-2 md:flex">
               <button
                 onClick={() => { setDraft(null); setRecording(true) }}
                 disabled={recording}
@@ -550,6 +569,19 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
             ))}
           </ul>
           <audio ref={audioRef} className="hidden" onEnded={() => setPlayingId(null)} />
+          {!recording && (
+            <div className="mt-3 space-y-2 md:hidden">
+              <button
+                onClick={() => { setDraft(null); setRecording(true) }}
+                className="focus-ring flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-white"
+              >
+                <Mic size={19} /> Record Voice Note
+              </button>
+              <button onClick={() => fileRef.current?.click()} disabled={busy} className="focus-ring flex w-full items-center justify-center gap-1.5 py-1.5 text-[13px] font-medium text-accent disabled:opacity-60">
+                <Paperclip size={15} /> Upload an audio file
+              </button>
+            </div>
+          )}
         </section>
 
         <Link
@@ -564,10 +596,12 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-30 bg-black/20 min-[1500px]:hidden" onClick={onClose} />
-      <aside className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-border bg-app shadow-pop min-[1500px]:static min-[1500px]:z-auto min-[1500px]:w-[420px] min-[1500px]:max-w-none min-[1500px]:shadow-none">
+      <div className="fixed inset-0 z-40 bg-black/30 min-[1500px]:hidden" onClick={onClose} />
+      {/* Phone: bottom sheet · tablet/laptop: right overlay · ≥1500px: docked beside the table */}
+      <aside className="fixed inset-x-0 bottom-0 top-10 z-50 flex flex-col overflow-hidden rounded-t-2xl bg-app shadow-pop md:inset-x-auto md:inset-y-0 md:right-0 md:top-0 md:w-full md:max-w-[420px] md:rounded-none md:border-l md:border-border min-[1500px]:static min-[1500px]:z-auto min-[1500px]:w-[420px] min-[1500px]:max-w-none min-[1500px]:shadow-none">
+        <div className="shrink-0 bg-surface pt-2 md:hidden"><div className="mx-auto h-1 w-10 rounded-full bg-border-strong" /></div>
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-5">
-          <h2 className="text-lg font-semibold text-ink">Task Detail</h2>
+          <h2 className="text-lg font-semibold text-ink"><span className="md:hidden">Task Details</span><span className="hidden md:inline">Task Detail</span></h2>
           <button onClick={onClose} title="Close" className="focus-ring grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle">
             <X size={20} />
           </button>

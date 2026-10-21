@@ -14,6 +14,12 @@ export async function processEvent({ event, entityType, entityId, assignedUserId
       select: { taskNo: true },
     })
     if (dupe) { skipped.push({ template: t.code, reason: 'open task already exists', taskNo: dupe.taskNo }); continue }
+    // An admin deleted this record's task on purpose — a re-delivered event must not bring it back.
+    const dismissed = await db.task.findFirst({
+      where: { entityId, taskType: t.taskType, deletedAt: { not: null } },
+      select: { taskNo: true },
+    })
+    if (dismissed) { skipped.push({ template: t.code, reason: 'task was deleted by an admin', taskNo: dismissed.taskNo }); continue }
     const task = await createTaskFromTemplate(t, {
       entityId, entityType: entityType || t.entityType, assignedUserId, createdById, dueAt,
     })

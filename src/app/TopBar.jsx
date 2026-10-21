@@ -65,19 +65,25 @@ export default function TopBar() {
   }
 
   return (
-    <header className="relative z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-5">
+    <header className="relative z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 md:px-5">
       <button onClick={() => navigate('/')} className="focus-ring flex items-center gap-3 rounded-control text-left">
         <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-accent text-white shadow-sm">
           <CheckSquare size={22} />
         </span>
-        <span className="leading-tight">
+        <span className="hidden leading-tight md:block">
           <span className="block text-[17px] font-semibold text-ink">Task Management</span>
           <span className="block text-[13px] text-ink-secondary">Decoinks ERP</span>
+        </span>
+        {/* Phone: brand wordmark, as in the mobile design */}
+        <span className="leading-none md:hidden">
+          <span className="block text-[20px] font-bold tracking-tight text-[#1B3A8C]">Decoinks</span>
+          <span className="block text-right text-[10px] font-semibold tracking-[0.2em] text-ink">ERP</span>
         </span>
       </button>
 
       <div className="flex items-center gap-2">
-        {/* Search → Task Management list filtered by the term */}
+        {/* Search → Task Management list filtered by the term (desktop; phones search on the page) */}
+        <div className="hidden md:block">
         {open === 'search' ? (
           <div className="flex items-center gap-1 rounded-full border border-border-strong bg-surface px-3">
             <Search size={16} className="text-ink-tertiary" />
@@ -101,6 +107,7 @@ export default function TopBar() {
             <Search size={20} />
           </button>
         )}
+        </div>
 
         {/* Notifications */}
         <div className="relative">
@@ -151,7 +158,7 @@ export default function TopBar() {
         </div>
 
         {/* Help */}
-        <div className="relative">
+        <div className="relative hidden md:block">
           <button onClick={() => toggle('help')} className={iconBtn} title="Help">
             <HelpCircle size={20} />
           </button>
@@ -169,7 +176,7 @@ export default function TopBar() {
         </div>
 
         {/* User */}
-        <div className="relative ml-2">
+        <div className="relative md:ml-2">
           <button onClick={() => toggle('user')} className="focus-ring flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2 hover:bg-subtle">
             <span
               className="grid h-10 w-10 place-items-center rounded-full text-sm font-semibold text-white"
@@ -177,11 +184,11 @@ export default function TopBar() {
             >
               {initials(user.name)}
             </span>
-            <span className="hidden text-left leading-tight sm:block">
+            <span className="hidden text-left leading-tight md:block">
               <span className="block text-sm font-semibold text-ink">{user.name}</span>
               <span className="block text-xs text-ink-secondary">{user.title}</span>
             </span>
-            <ChevronDown size={14} className="text-ink-tertiary" />
+            <ChevronDown size={14} className="hidden text-ink-tertiary md:block" />
           </button>
           {open === 'user' && (
             <div className="absolute right-0 top-14 z-50 w-48 rounded-card border border-border bg-surface py-1 shadow-pop">

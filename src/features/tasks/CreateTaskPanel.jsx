@@ -3,6 +3,7 @@ import { X, Plus, Trash2, Upload, Bot } from 'lucide-react'
 import { api } from '../../data/api'
 import { useAuth, initials } from '../../auth/AuthContext'
 import VoiceRecorder from '../../components/VoiceRecorder'
+import { CATEGORIES } from './taskMeta'
 
 function SectionHead({ n, title, optional }) {
   return (
@@ -183,12 +184,12 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
       <div className="relative flex h-full w-full max-w-3xl flex-col bg-app shadow-pop">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border bg-surface px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 md:px-6 md:py-4">
           <div>
             <h2 className="text-lg font-semibold text-ink">
               {user.role === 'SALES' ? 'Create Design Task' : 'Create New Task'}
             </h2>
-            <p className="text-xs text-ink-secondary">
+            <p className="hidden text-xs text-ink-secondary md:block">
               {user.role === 'SALES'
                 ? 'Assign a design task to a designer with clear instructions.'
                 : 'Assign a new task to anyone in the organization.'}
@@ -197,7 +198,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="focus-ring rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-ink-secondary hover:bg-subtle"
+              className="focus-ring hidden rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-ink-secondary hover:bg-subtle md:block"
             >
               Cancel
             </button>
@@ -223,7 +224,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
           </div>
         )}
 
-        <div className="grid flex-1 grid-cols-2 gap-5 overflow-y-auto p-6">
+        <div className="grid flex-1 grid-cols-1 gap-5 overflow-y-auto p-4 pb-10 md:grid-cols-2 md:p-6">
           {/* Left column */}
           <div className="space-y-6">
             <section className="rounded-card border border-border bg-surface p-5 shadow-card">
@@ -257,7 +258,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 </div>
                 <Field label="Task Type" required>
                   <select className={inputCls} value={form.category} onChange={set('category')}>
-                    {['Order Related', 'General'].map((c) => <option key={c}>{c}</option>)}
+                    {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
                   </select>
                 </Field>
                 <Field label="Work Type" required>

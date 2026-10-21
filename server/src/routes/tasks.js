@@ -175,7 +175,7 @@ const CreateSchema = z.object({
   affectedSystem: z.string().optional(),
   customerName: z.string().max(160).optional(),
   routineTaskId: z.string().optional(),
-  category: z.enum(['Order Related', 'General']).optional(),
+  category: z.enum(['Order Related', 'General', 'Admin']).optional(),
   voiceNote: z.string().regex(/^data:audio\//, 'Voice note must be an audio data URL').max(14_000_000).optional(),
   voiceTranscript: z.string().max(4000).optional(),
   voiceNotes: z

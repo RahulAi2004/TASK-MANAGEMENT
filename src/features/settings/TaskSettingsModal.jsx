@@ -213,24 +213,24 @@ export default function TaskSettingsModal({ open, onClose }) {
   const td = 'px-4 py-3 text-[14px]'
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[#1B2333]/40 p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#1B2333]/40 p-0 md:p-4" onMouseDown={onClose}>
       <div
         ref={scrollRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-settings-title"
         onMouseDown={(e) => e.stopPropagation()}
-        className="max-h-[94vh] w-full max-w-[1480px] overflow-y-auto rounded-[14px] bg-app p-5 shadow-pop"
+        className="h-full w-full max-w-[1480px] overflow-y-auto bg-app p-3 shadow-pop md:h-auto md:max-h-[94vh] md:rounded-[14px] md:p-5"
       >
         {/* Header */}
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+            <span className="hidden h-14 w-14 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent sm:grid">
               <Settings size={28} />
             </span>
             <div>
-              <h2 id="task-settings-title" className="text-[26px] font-semibold leading-tight text-ink">Task Settings</h2>
-              <p className="text-[15px] text-ink-secondary">Create and manage routine task definitions that can be assigned to team members.</p>
+              <h2 id="task-settings-title" className="text-[22px] font-semibold leading-tight text-ink md:text-[26px]">Task Settings</h2>
+              <p className="text-[13px] text-ink-secondary md:text-[15px]">Create and manage routine task definitions that can be assigned to team members.</p>
             </div>
           </div>
           <button onClick={onClose} title="Close" className="focus-ring grid h-10 w-10 place-items-center rounded-control text-ink-secondary hover:bg-subtle">
@@ -381,11 +381,11 @@ export default function TaskSettingsModal({ open, onClose }) {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <span className="relative block w-64">
+              <span className="relative block w-full sm:w-64">
                 <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-secondary" />
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search routine tasks…" className={inputCls + ' h-10 pl-10'} />
               </span>
-              <span className="relative block w-52">
+              <span className="relative block w-full sm:w-52">
                 <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className={inputCls + ' h-10 appearance-none pr-10'}>
                   <option value="">All Departments</option>
                   {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -395,7 +395,7 @@ export default function TaskSettingsModal({ open, onClose }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1080px] border-collapse">
               <thead className="bg-subtle">
                 <tr>
@@ -457,6 +457,44 @@ export default function TaskSettingsModal({ open, onClose }) {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Phones: one card per routine task instead of the 9-column table */}
+          <div className="space-y-2.5 border-t border-border p-3 md:hidden">
+            {loading ? (
+              <p className="py-6 text-center text-sm text-ink-tertiary">Loading…</p>
+            ) : visible.length === 0 ? (
+              <p className="py-6 text-center text-sm text-ink-tertiary">{routines.length ? 'No routine tasks match.' : 'No routine tasks yet — add one above.'}</p>
+            ) : (
+              visible.map((r) => (
+                <div key={r.id} className={'rounded-card border p-3 ' + (editingId === r.id ? 'border-accent bg-accent-soft/40' : 'border-border bg-surface')}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-semibold text-ink">{r.title}</div>
+                      <div className="text-[13px] text-ink-secondary">{r.department?.name}{r.template ? ' · ' + r.template.name : ''}</div>
+                    </div>
+                    <Toggle
+                      on={r.isActive}
+                      label={`${r.title} active`}
+                      onChange={(v) => act(() => api.updateRoutine(r.id, { isActive: v }), v ? 'Activated' : 'Deactivated')}
+                    />
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[12px] font-medium">
+                    <span className="rounded-chip bg-[#ECF8F0] px-2 py-0.5 text-[#1E7B34]">Normal {fmtHM(r.normalMinutes)}</span>
+                    <span className="rounded-chip bg-[#FFF6E8] px-2 py-0.5 text-[#C25E00]">Critical {fmtHM(r.criticalMinutes)}</span>
+                    <span className="rounded-chip bg-[#FDECEE] px-2 py-0.5 text-[#D13438]">Delayed {fmtHM(r.delayedMinutes)}</span>
+                  </div>
+                  <div className="mt-2.5 flex items-center justify-between">
+                    <PriorityChip priority={r.priority} />
+                    <div className="flex gap-2">
+                      <button onClick={() => startEdit(r)} title="Edit" className="focus-ring grid h-9 w-9 place-items-center rounded-control bg-accent-soft text-accent"><Pencil size={17} /></button>
+                      <button onClick={() => act(() => api.duplicateRoutine(r.id), 'Routine task duplicated')} title="Duplicate" className="focus-ring grid h-9 w-9 place-items-center rounded-control bg-subtle text-ink-secondary"><Copy size={17} /></button>
+                      <button onClick={() => remove(r)} title="Delete" className="focus-ring grid h-9 w-9 place-items-center rounded-control bg-status-dangersoft text-status-danger"><Trash2 size={17} /></button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </section>
       </div>

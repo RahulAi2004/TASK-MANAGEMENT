@@ -10,16 +10,18 @@ export function taskMeta(t) {
   }
 }
 
-/** "Order Related" | "General" — explicit on new tasks, inferred from the module for older ones. */
+/** "Order Related" | "General" | "Admin" — explicit on new tasks, inferred from the module for older ones. */
 export function taskCategory(t) {
   const m = taskMeta(t)
   if (m.category) return m.category
   return /order/i.test(t?.entityType || '') ? 'Order Related' : 'General'
 }
 
+export const CATEGORIES = ['Order Related', 'General', 'Admin']
 export const CATEGORY_STYLE = {
   'Order Related': { bg: '#EAF2FF', fg: '#1A66E5' },
   General: { bg: '#F1EBFD', fg: '#6B47D6' },
+  Admin: { bg: '#E6F6F4', fg: '#0F7B6C' },
 }
 
 const HOUR = 3_600_000

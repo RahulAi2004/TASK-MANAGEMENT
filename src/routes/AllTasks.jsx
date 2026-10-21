@@ -8,15 +8,15 @@ import { Search, ChevronDown, Calendar, RotateCw, Settings, ChevronLeft, Chevron
 import AppShell from '../app/AppShell'
 import StatCards from '../features/dashboard/StatCards'
 import TaskGrid from '../features/tasks/TaskGrid'
+import MobileTaskList from '../features/tasks/MobileTaskList'
 import TaskDetailPanel from '../features/tasks/TaskDetailPanel'
-import TaskSettingsModal from '../features/settings/TaskSettingsModal'
 import useNow from '../features/tasks/useNow'
-import { taskCategory, slaStatus } from '../features/tasks/taskMeta'
+import { taskCategory, slaStatus, CATEGORIES as TASK_CATEGORIES } from '../features/tasks/taskMeta'
 import { api } from '../data/api'
 import { useApi, useAuth } from '../auth/AuthContext'
 
 const STATUSES = ['All', 'Pending', 'Assigned', 'In Progress', 'Waiting / On Hold', 'Submitted', 'Completed', 'Rejected', 'Cancelled', 'Overdue']
-const CATEGORIES = ['All', 'Order Related', 'General']
+const CATEGORIES = ['All', ...TASK_CATEGORIES]
 const SLAS = ['All', 'Normal', 'Critical', 'Delayed']
 const RANGES = [
   { key: 'all', label: 'All time' },
@@ -102,7 +102,6 @@ function Select({ label, value, onChange, children, icon: Icon }) {
 export default function AllTasks() {
   const { user } = useAuth()
   const isAdmin = user.role === 'ADMIN'
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [params, setParams] = useSearchParams()
   const selectedId = params.get('task')
   const urlQ = params.get('q') || ''
@@ -145,13 +144,15 @@ export default function AllTasks() {
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [all])
 
-  const rows = all.filter(
+  const baseRows = all.filter(
     (t) =>
       (f.category === 'All' || taskCategory(t) === f.category) &&
       (f.module === 'All' || t.department?.name === f.module) &&
-      (f.owner === 'All' || (f.owner === 'none' ? !t.assignedUser : t.assignedUser?.id === f.owner)) &&
-      (f.sla === 'All' || slaStatus(t, now) === f.sla)
+      (f.owner === 'All' || (f.owner === 'none' ? !t.assignedUser : t.assignedUser?.id === f.owner))
   )
+  // SLA chip counts (phone) are taken before the SLA filter, so each chip shows what it would select.
+  const slaCounts = baseRows.reduce((m, t) => { const s = slaStatus(t, now); if (s) m[s] = (m[s] || 0) + 1; return m }, {})
+  const rows = f.sla === 'All' ? baseRows : baseRows.filter((t) => slaStatus(t, now) === f.sla)
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const current = Math.min(page, pages)
   const pageRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
@@ -171,19 +172,27 @@ export default function AllTasks() {
       title="Task Management"
       subtitle="Manage, monitor and complete all tasks in one place"
       onTasksChanged={reloadAll}
-      actions={
+      actions={(shell) =>
         isAdmin && (
           <button
-            onClick={() => setSettingsOpen(true)}
+            onClick={shell.openSettings}
             className="focus-ring flex items-center gap-2 rounded-control border border-accent bg-surface px-5 py-2.5 text-[15px] font-medium text-accent hover:bg-accent-soft"
           >
             <Settings size={18} /> Settings
           </button>
         )
       }
+      hideMobileHeader
       aside={selectedId && <TaskDetailPanel key={selectedId} taskId={selectedId} onClose={closeTask} onChanged={reloadAll} />}
     >
-      <div className="space-y-4">
+      <MobileTaskList
+        title={isAdmin ? 'All Tasks' : 'My Tasks'}
+        tasks={rows} slaCounts={slaCounts} f={f} set={set} q={q} setQ={setQ}
+        onOpen={openTask} selectedId={selectedId} isAdmin={isAdmin} modules={modules} owners={owners}
+        ranges={RANGES} statuses={STATUSES} filtersActive={filtersActive} clearFilters={clearFilters}
+        now={now} loading={list.loading} error={list.error}
+      />
+      <div className="hidden space-y-4 md:block">
         <StatCards
           stats={stats.data?.stats}
           active={f.status}
@@ -273,7 +282,6 @@ export default function AllTasks() {
           )}
         </section>
       </div>
-      {isAdmin && <TaskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
     </AppShell>
   )
 }
