@@ -28,6 +28,8 @@ async function req(path, opts = {}) {
 export const api = {
   login: (email, password) =>
     req('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  // Exchanges the Authentik forward-auth headers (added by nginx) for a token.
+  sso: () => req('/auth/sso', { method: 'POST' }),
   me: () => req('/auth/me'),
   stats: () => req('/tasks/stats'),
   tasks: (params = {}) => req('/tasks?' + new URLSearchParams(params)),

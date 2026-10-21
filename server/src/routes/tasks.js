@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { db } from '../lib/db.js'
-import { authRequired, assignableRoleFilter } from '../lib/auth.js'
+import { authRequired, assignableRoleFilter, requireRole } from '../lib/auth.js'
 import { canPerform } from '../lib/stateMachine.js'
 import { addDependency, removeDependency, onTaskCompleted } from '../lib/dependencies.js'
 import { runArtworkAnalysis } from '../lib/ai.js'
@@ -10,10 +10,15 @@ export const tasksRouter = Router()
 tasksRouter.use(authRequired)
 
 const userSelect = { select: { id: true, name: true, role: true, title: true, color: true } }
+// Artworks travel with a task everywhere, but the thumbnail only on the detail: a list of 100
+// tasks would otherwise carry 100 base64 previews. Apps with vault access (Design Studio) render
+// the live thumbnail from assetId instead.
+const artworkListSelect = { select: { id: true, assetId: true, fileName: true, artworkCode: true, customerName: true, folder: true } }
 const listInclude = {
   assignedUser: userSelect,
   createdBy: userSelect,
   department: { select: { code: true, name: true } },
+  artworks: artworkListSelect,
 }
 
 /** Visibility scoping: ADMIN sees all; everyone else sees assigned-to-me or created-by-me. */
@@ -22,9 +27,22 @@ function visibilityWhere(user) {
   return { OR: [{ assignedUserId: user.id }, { createdById: user.id }] }
 }
 
+/** One row per vault asset — a picker that emits the same file twice must not fail the create. */
+function dedupeArtworks(list = []) {
+  const seen = new Set()
+  return list.filter((a) => (seen.has(a.assetId) ? false : seen.add(a.assetId)))
+}
+
 // ── Stats (role-scoped dashboard cards) ──────────────────────────────────────
+// actionType narrows the cards the same way it narrows the list, so a client that
+// only shows human tasks (Design Studio does) does not count machine work in them.
 tasksRouter.get('/stats', async (req, res) => {
-  const base = { ...visibilityWhere(req.user), deletedAt: null }
+  const { actionType } = req.query
+  const base = {
+    ...visibilityWhere(req.user),
+    deletedAt: null,
+    ...(['A', 'H', 'G'].includes(actionType) ? { actionType } : {}),
+  }
   const startOfDay = new Date(new Date().setHours(0, 0, 0, 0))
   const [assigned, inProgress, waiting, submitted, completedToday, overdue, total] = await Promise.all([
     db.task.count({ where: { ...base, status: { in: ['Assigned', 'Accepted'] } } }),
@@ -118,10 +136,25 @@ tasksRouter.get('/:id', async (req, res) => {
       dependencies: { include: { dependsOnTask: { select: { id: true, taskNo: true, title: true, status: true } } } },
       dependents: { include: { task: { select: { id: true, taskNo: true, title: true, status: true } } } },
       files: { select: { id: true, fileName: true, fileType: true, kind: true, sizeBytes: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+      artworks: { orderBy: { createdAt: 'asc' } },
     },
   })
   if (!task) return res.status(404).json({ error: 'Task not found' })
   res.json({ task })
+})
+
+// An artwork sent over from the vault. thumbData is a small preview, not the file — the original
+// stays in Nextcloud and is re-opened through assetId.
+const ArtworkSchema = z.object({
+  assetId: z.string().min(1).max(120),
+  fileName: z.string().min(1).max(255),
+  artworkCode: z.string().max(120).optional(),
+  customerName: z.string().max(255).optional(),
+  folder: z.string().max(255).optional(),
+  mimeType: z.string().max(120).optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  thumbData: z.string().regex(/^data:image\//, 'Thumbnail must be an image data URL').max(400_000).optional(),
+  sourceApp: z.string().max(60).default('design-studio'),
 })
 
 // ── Create ───────────────────────────────────────────────────────────────────
@@ -154,6 +187,7 @@ const CreateSchema = z.object({
     .max(5, 'At most 5 voice notes per task')
     .default([]),
   checklist: z.array(z.object({ item: z.string().min(1), isRequired: z.boolean().default(true) })).default([]),
+  artworks: z.array(ArtworkSchema).max(24, 'At most 24 artworks per task').default([]),
 })
 
 tasksRouter.post('/', async (req, res) => {
@@ -215,6 +249,11 @@ tasksRouter.post('/', async (req, res) => {
       voiceNotes: {
         create: data.voiceNotes.map((v, i) => ({ sequenceNo: i + 1, audioData: v.audioData, transcript: v.transcript, fileName: `Recording ${i + 1}`, recordedById: req.user.id })),
       },
+      // Same file sent twice in one payload is one attachment — the unique index would
+      // otherwise reject the whole task over a double-click in the picker.
+      artworks: {
+        create: dedupeArtworks(data.artworks).map((a) => ({ ...a, addedById: req.user.id })),
+      },
     },
     include: listInclude,
   })
@@ -225,6 +264,25 @@ tasksRouter.post('/', async (req, res) => {
     data: { taskId: task.id, activityType: 'Created', newStatus: 'Assigned', performedById: req.user.id },
   })
   res.status(201).json({ task })
+})
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+// Soft delete: `deletedAt` already hides a task from every list, detail and count in
+// this API, and keeping the row preserves the history, comments and the artwork trail
+// that the activity log refers to. Admin only — a task someone spent hours on must not
+// disappear because its creator changed their mind.
+tasksRouter.delete('/:id', requireRole('ADMIN'), async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const reason = String(req.body?.reason || '').slice(0, 500).trim()
+  await db.task.update({ where: { id: task.id }, data: { deletedAt: new Date() } })
+  await db.activity.create({
+    data: {
+      taskId: task.id, activityType: 'Deleted', oldStatus: task.status,
+      performedById: req.user.id, notes: reason || 'Deleted by administrator',
+    },
+  })
+  res.json({ ok: true, taskNo: task.taskNo })
 })
 
 // ── Transition (state machine) ───────────────────────────────────────────────
@@ -353,6 +411,39 @@ tasksRouter.delete('/:id/files/:fileId', async (req, res) => {
   if (!task) return res.status(404).json({ error: 'Task not found' })
   try { await db.taskFile.delete({ where: { id: req.params.fileId } }); res.json({ ok: true }) }
   catch { res.status(404).json({ error: 'File not found' }) }
+})
+
+// ── Vault artworks (sent over from Design Studio) ────────────────────────────
+// Adding artwork to a task that already exists — the create path takes them inline.
+tasksRouter.post('/:id/artworks', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const p = z.object({ artworks: z.array(ArtworkSchema).min(1).max(24) }).safeParse(req.body)
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid artwork' })
+
+  const wanted = dedupeArtworks(p.data.artworks)
+  const existing = await db.taskArtwork.findMany({ where: { taskId: task.id }, select: { assetId: true } })
+  const have = new Set(existing.map((a) => a.assetId))
+  const fresh = wanted.filter((a) => !have.has(a.assetId))
+  if (fresh.length) {
+    await db.taskArtwork.createMany({ data: fresh.map((a) => ({ ...a, taskId: task.id, addedById: req.user.id })) })
+    await db.activity.create({
+      data: {
+        taskId: task.id, activityType: 'FileAdded', performedById: req.user.id,
+        notes: `Attached ${fresh.length} artwork${fresh.length > 1 ? 's' : ''} from the vault: ${fresh.map((a) => a.fileName).join(', ')}`,
+      },
+    })
+  }
+  const artworks = await db.taskArtwork.findMany({ where: { taskId: task.id }, orderBy: { createdAt: 'asc' } })
+  res.status(201).json({ artworks, added: fresh.length, skipped: wanted.length - fresh.length })
+})
+
+tasksRouter.delete('/:id/artworks/:artworkId', async (req, res) => {
+  const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  const removed = await db.taskArtwork.deleteMany({ where: { id: req.params.artworkId, taskId: task.id } })
+  if (!removed.count) return res.status(404).json({ error: 'Artwork not found' })
+  res.json({ ok: true })
 })
 
 // ── AI first attempt (Artwork Analyzer) ──────────────────────────────────────

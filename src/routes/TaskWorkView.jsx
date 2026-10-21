@@ -26,7 +26,7 @@ function useElapsed(startedAt, running) {
   return `${hh}:${mm}:${ss}`
 }
 
-const TABS = ['Details', 'Checklist', 'Dependencies', 'Files', 'Comments', 'Activity']
+const TABS = ['Details', 'Artwork', 'Checklist', 'Dependencies', 'Files', 'Comments', 'Activity']
 const fmtSize = (b) => (b == null ? '' : b > 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB')
 const DEP_COLOR = { Completed: 'text-emerald-600', 'In Progress': 'text-accent', Submitted: 'text-amber-600', Waiting: 'text-amber-600', Pending: 'text-ink-tertiary', Assigned: 'text-ink-secondary', Cancelled: 'text-ink-tertiary', Rejected: 'text-danger' }
 
@@ -289,6 +289,9 @@ export default function TaskWorkView() {
               }
             >
               {x}
+              {x === 'Artwork' && t.artworks?.length > 0 && (
+                <span className="ml-1 text-xs text-ink-tertiary">({t.artworks.length})</span>
+              )}
               {x === 'Checklist' && t.checklist.length > 0 && (
                 <span className="ml-1 text-xs text-ink-tertiary">
                   ({t.checklist.filter((c) => c.isCompleted).length}/{t.checklist.length})
@@ -364,6 +367,39 @@ export default function TaskWorkView() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Artwork picked from the vault in Design Studio. The files themselves stay in
+              Nextcloud, which this app cannot reach — the preview stored with the task is
+              what makes them visible here, under the vault's own file names. */}
+          {tab === 'Artwork' && (
+            t.artworks?.length ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {t.artworks.map((a) => (
+                  <figure key={a.id} className="overflow-hidden rounded-card border border-border bg-surface">
+                    <div className="grid h-36 place-items-center bg-subtle">
+                      {a.thumbData ? (
+                        <img src={a.thumbData} alt={a.fileName} className="h-full w-full object-contain" loading="lazy" />
+                      ) : (
+                        <span className="text-xs font-semibold tracking-wide text-ink-tertiary">
+                          {(a.fileName.split('.').pop() || 'FILE').toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <figcaption className="px-2.5 pt-2 text-[11px] font-medium leading-tight text-ink break-all" title={a.fileName}>
+                      {a.fileName}
+                    </figcaption>
+                    <div className="px-2.5 pb-2.5 pt-1 text-[10px] text-ink-tertiary">
+                      {a.customerName || 'Unlinked'}{a.folder ? ` · ${a.folder}` : ''}{a.sizeBytes ? ` · ${fmtSize(a.sizeBytes)}` : ''}
+                    </div>
+                  </figure>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-ink-tertiary">
+                No vault artwork attached. Files are sent over from the Vault in Design Studio.
+              </p>
+            )
           )}
 
           {tab === 'Checklist' && (
