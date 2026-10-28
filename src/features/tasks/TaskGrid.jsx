@@ -29,17 +29,17 @@ export default function TaskGrid({ tasks, now, selectedId, onOpen }) {
           <tr className="border-b border-border">
             <th className={th + ' pl-3'}>Task No.</th>
             <th className={th}>Task</th>
-            <th className={th}>Task Type</th>
-            <th className={th}>Module</th>
-            <th className={th}>Entity / Order</th>
-            <th className={th}>Customer Name</th>
-            <th className={th}>Owner</th>
+            <th className={th}>Category</th>
+            <th className={th}>Department</th>
+            <th className={th}>Order / Ref</th>
+            <th className={th}>Customer</th>
+            <th className={th}>Assigned to</th>
             <th className={th}>Priority</th>
-            <th className={th}>Started at</th>
-            <th className={th}>Elapsed Time</th>
-            <th className={th}>Normal Time</th>
-            <th className={th}>SLA Status</th>
-            <th className={th}>Task Status</th>
+            <th className={th}>Started</th>
+            <th className={th}>Time spent</th>
+            <th className={th}>Target time</th>
+            <th className={th}>On time?</th>
+            <th className={th}>Status</th>
             <th className={th + ' pr-3 text-center'}>Action</th>
           </tr>
         </thead>

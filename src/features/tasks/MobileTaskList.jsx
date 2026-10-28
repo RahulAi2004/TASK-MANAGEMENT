@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import {
   List, LayoutGrid, Search, SlidersHorizontal, Tag, ChevronDown, ChevronRight, Clock, X, CheckCircle2,
-  AlertTriangle, AlertCircle, Check, RotateCw,
+  AlertTriangle, AlertCircle, RotateCw,
 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import PriorityFlag from './PriorityFlag'
@@ -14,16 +14,19 @@ import { taskMeta, taskCategory, elapsedMs, slaStatus, fmtDuration, fmtMinutes, 
 
 const STATUS_CHIPS = [
   { label: 'All', value: 'All' },
-  { label: 'In Progress', value: 'In Progress' },
-  { label: 'On Hold', value: 'Waiting / On Hold' },
-  { label: 'Completed', value: 'Completed' },
+  { label: 'In progress', value: 'In Progress' },
+  { label: 'Paused', value: 'Waiting / On Hold' },
+  { label: 'Done', value: 'Completed' },
 ]
-// Phones say "On Track" for Normal, as in the mobile design.
+// Same plain labels as the desktop (On track / At risk / Delayed).
 const SLA_BADGE = {
-  Normal: { label: 'On Track', icon: CheckCircle2, bg: '#E7F6EC', fg: '#1E7B34' },
-  Critical: { label: 'Critical', icon: AlertTriangle, bg: '#FFF1E0', fg: '#C25E00' },
+  Normal: { label: 'On track', icon: CheckCircle2, bg: '#E7F6EC', fg: '#1E7B34' },
+  Critical: { label: 'At risk', icon: AlertTriangle, bg: '#FFF1E0', fg: '#C25E00' },
   Delayed: { label: 'Delayed', icon: AlertCircle, bg: '#FDE7E9', fg: '#D13438' },
 }
+// "SO-7819 • Bright Wear Co." — placeholder references ("GENERAL", "nil") are left out.
+const refLine = (t, meta) =>
+  [t.entityId && !['GENERAL', 'nil'].includes(t.entityId) ? t.entityId : null, meta.customerName].filter(Boolean).join(' • ')
 const ROW_TINT = { Delayed: 'bg-[#FFF6F6]', Critical: 'bg-[#FFFAF2]' }
 
 const chip = (on) =>
@@ -96,7 +99,7 @@ export default function MobileTaskList({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[28px] font-bold leading-tight text-ink">{title}</h1>
-          <p className="text-[14px] text-ink-secondary">Stay on track with your routine tasks</p>
+          <p className="text-[14px] text-ink-secondary">Tap a task to see what to do next</p>
         </div>
         <div className="flex shrink-0 rounded-control border border-border bg-surface p-0.5" role="tablist" aria-label="View">
           {[['list', 'List', List], ['cards', 'Cards', LayoutGrid]].map(([key, label, Icon]) => (
@@ -135,7 +138,7 @@ export default function MobileTaskList({
               className="focus-ring flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-1.5 text-[13px] font-medium"
               style={on ? { background: tone, borderColor: tone, color: '#fff' } : { background: s === 'Delayed' ? '#FDE7E9' : '#FFF1E0', borderColor: 'transparent', color: tone }}
             >
-              {s}
+              {SLA_BADGE[s].label}
               <span className="grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-bold" style={on ? { background: '#fff', color: tone } : { background: tone, color: '#fff' }}>
                 {slaCounts[s] || 0}
               </span>
@@ -173,14 +176,14 @@ export default function MobileTaskList({
           onClick={() => setTypeOpen((o) => !o)}
           className="focus-ring inline-flex items-center gap-1.5 rounded-control bg-accent-soft px-3 py-2 text-[14px] text-accent"
         >
-          <Tag size={16} /> Task Type: <span className="font-semibold">{f.category}</span> <ChevronDown size={16} />
+          <Tag size={16} /> Category: <span className="font-semibold">{f.category}</span> <ChevronDown size={16} />
         </button>
         {typeOpen && (
           <>
             <div className="fixed inset-0 z-20" onClick={() => setTypeOpen(false)} />
             <div className="absolute left-0 top-full z-30 mt-1.5 w-56 rounded-card border border-border bg-surface p-2 shadow-pop">
               <div className="mb-1 flex items-center justify-between px-2 pt-1">
-                <span className="text-[15px] font-semibold text-ink">Task Type</span>
+                <span className="text-[15px] font-semibold text-ink">Category</span>
                 <button onClick={() => setTypeOpen(false)} aria-label="Close" className="text-ink-secondary"><X size={18} /></button>
               </div>
               {['All', ...CATEGORIES].map((c) => (
@@ -217,26 +220,17 @@ export default function MobileTaskList({
           {shown.map((t) => {
             const meta = taskMeta(t)
             const sla = slaStatus(t, now)
-            const done = t.status === 'Completed'
             return (
               <li key={t.id}>
                 <button
                   onClick={() => onOpen(t.id)}
                   className={'flex w-full items-center gap-3 px-4 py-3.5 text-left ' + (t.id === selectedId ? 'bg-accent-soft/60' : ROW_TINT[sla] || '')}
                 >
-                  <span
-                    aria-label={done ? 'Completed' : 'Not completed'}
-                    className={'grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 ' + (done ? 'border-[#1E7B34] bg-[#1E7B34] text-white' : 'border-border-strong bg-surface')}
-                  >
-                    {done && <Check size={14} strokeWidth={3} />}
-                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[16px] font-semibold text-ink">{t.title}</span>
-                    <span className="block truncate text-[13px] text-ink-secondary">
-                      {t.entityId}{meta.customerName ? ' • ' + meta.customerName : ''}
-                    </span>
+                    {refLine(t, meta) && <span className="block truncate text-[13px] text-ink-secondary">{refLine(t, meta)}</span>}
                     <span className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <CategoryChip category={taskCategory(t)} />
+                      <StatusBadge status={t.status} size="sm" />
                       <TimeLabel t={t} now={now} />
                     </span>
                   </span>
@@ -265,7 +259,7 @@ export default function MobileTaskList({
                   <div className="min-w-0">
                     <div className="text-[12px] font-medium text-accent">{t.taskNo}</div>
                     <div className="text-[16px] font-semibold leading-snug text-ink">{t.title}</div>
-                    <div className="truncate text-[13px] text-ink-secondary">{t.entityId}{meta.customerName ? ' • ' + meta.customerName : ''}</div>
+                    <div className="truncate text-[13px] text-ink-secondary">{refLine(t, meta)}</div>
                   </div>
                   <SlaBadge status={sla} />
                 </div>

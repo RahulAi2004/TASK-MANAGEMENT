@@ -64,11 +64,86 @@ export function slaStatus(t, now = Date.now()) {
   return 'Normal'
 }
 
+// `label` is what people see; the keys stay the stored/computed values (Task Settings still
+// defines the Normal / Critical / Delayed thresholds by those names).
 export const SLA_STYLE = {
-  Normal: { bg: '#E7F6EC', fg: '#1E7B34', hint: 'On track' },
-  Critical: { bg: '#FFF1E0', fg: '#C25E00', hint: 'At risk — past the critical threshold, or due within 2 hours' },
-  Delayed: { bg: '#FDE7E9', fg: '#D13438', hint: 'Past the delayed threshold or the due date' },
+  Normal: { label: 'On track', bg: '#E7F6EC', fg: '#1E7B34', hint: 'On track — within its target time' },
+  Critical: { label: 'At risk', bg: '#FFF1E0', fg: '#C25E00', hint: 'At risk — close to its time limit, or due within 2 hours' },
+  Delayed: { label: 'Delayed', bg: '#FDE7E9', fg: '#D13438', hint: 'Delayed — past its time limit or due date' },
 }
+
+// ── Plain-language status (what people read; the stored status values are unchanged) ──
+export const STATUS_LABEL = {
+  Pending: 'Not assigned',
+  Assigned: 'To do',
+  Accepted: 'To do',
+  'In Progress': 'In progress',
+  'On Hold': 'Paused',
+  Waiting: 'Blocked',
+  Submitted: 'In review',
+  Completed: 'Done',
+  Rejected: 'Sent back',
+  Reopened: 'To do',
+  Cancelled: 'Cancelled',
+  Overdue: 'Late',
+}
+export const statusLabel = (s) => STATUS_LABEL[s] || s
+
+const firstName = (u) => (u?.name || '').split(' ')[0] || 'someone'
+
+/** One sentence saying where the task stands and who has to act next. */
+export function statusSentence(t, user) {
+  const me = t.assignedUser?.id === user?.id
+  const reviewerIsMe = t.createdBy?.id === user?.id || user?.role === 'ADMIN'
+  switch (t.status) {
+    case 'Pending':
+      return t.assignedUser ? `Waiting for ${me ? 'you' : firstName(t.assignedUser)} to start` : 'Nobody is assigned yet'
+    case 'Assigned':
+    case 'Accepted':
+    case 'Reopened':
+      return me ? 'Ready for you to start' : `Waiting for ${firstName(t.assignedUser)} to start`
+    case 'In Progress':
+      return me ? 'You are working on this' : `${firstName(t.assignedUser)} is working on this`
+    case 'On Hold':
+      return 'Paused — resume when ready'
+    case 'Waiting':
+      return 'Blocked — waiting for another task to finish'
+    case 'Submitted':
+      return reviewerIsMe ? 'Finished — ready for your review' : `Finished — waiting for ${firstName(t.createdBy)} to review`
+    case 'Rejected':
+      return 'Sent back — needs changes'
+    case 'Completed':
+      return 'Done'
+    case 'Cancelled':
+      return 'Cancelled'
+    default:
+      return statusLabel(t.status)
+  }
+}
+
+/** Due date in words: "Due in 3h", "Due tomorrow, 5:00 PM", "2 days late", "Done". */
+export function dueLabel(t, now = Date.now()) {
+  if (t.status === 'Completed') return { text: 'Done', tone: 'done' }
+  if (t.status === 'Cancelled') return { text: '—', tone: 'muted' }
+  if (!t.dueAt) return { text: 'No due date', tone: 'muted' }
+  const due = new Date(t.dueAt)
+  const diff = due - now
+  const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime() }
+  const days = Math.round((dayStart(due) - dayStart(now)) / 86_400_000)
+  if (diff < 0) {
+    const late = -diff
+    if (late < HOUR) return { text: `${Math.max(1, Math.round(late / 60_000))}m late`, tone: 'late' }
+    if (late < 24 * HOUR) return { text: `${Math.round(late / HOUR)}h late`, tone: 'late' }
+    const d = Math.round(late / (24 * HOUR))
+    return { text: `${d} day${d === 1 ? '' : 's'} late`, tone: 'late' }
+  }
+  if (diff < HOUR) return { text: `Due in ${Math.max(1, Math.round(diff / 60_000))}m`, tone: 'soon' }
+  if (days === 0) return { text: `Due today, ${fmtTime(t.dueAt)}`, tone: diff < 2 * HOUR ? 'soon' : 'ok' }
+  if (days === 1) return { text: `Due tomorrow, ${fmtTime(t.dueAt)}`, tone: 'ok' }
+  if (days < 7) return { text: `Due ${due.toLocaleDateString('en-US', { weekday: 'long' })}`, tone: 'ok' }
+  return { text: `Due ${due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`, tone: 'ok' }
+}
+export const DUE_TONE = { late: 'text-status-danger font-semibold', soon: 'text-[#C25E00] font-medium', ok: 'text-ink', done: 'text-[#1E7B34] font-medium', muted: 'text-ink-tertiary' }
 
 export function fmtDuration(ms) {
   if (ms == null) return '—'
@@ -105,15 +180,17 @@ export function fmtClock(seconds) {
 }
 
 // ── State machine mirror (labels + who may fire each event) ───────────────────
+// `primary` marks the step that moves a task forward — shown as the big button; the rest are
+// secondary (smaller buttons / "More"). Order = display order.
 const TRANSITIONS = [
-  { event: 'accept', label: 'Accept task', from: ['Assigned'], who: 'assignee', onlyIf: (t) => t.requiresAcceptance },
-  { event: 'start', label: 'Start task', from: ['Assigned', 'Accepted', 'Reopened'], who: 'assignee' },
-  { event: 'resume', label: 'Resume', from: ['On Hold', 'Waiting'], who: 'assignee' },
-  { event: 'pause', label: 'Put on hold', from: ['In Progress'], who: 'assignee' },
-  { event: 'submit', label: 'Submit for review', from: ['In Progress'], who: 'assignee' },
-  { event: 'approve', label: 'Approve', from: ['Submitted'], who: 'reviewer' },
-  { event: 'reject', label: 'Reject', from: ['Submitted'], who: 'reviewer', danger: true },
-  { event: 'reopen', label: 'Reopen', from: ['Rejected'], who: 'reviewer' },
+  { event: 'accept', label: 'Accept', from: ['Assigned'], who: 'assignee', primary: true, onlyIf: (t) => t.requiresAcceptance },
+  { event: 'start', label: 'Start', from: ['Assigned', 'Accepted', 'Reopened'], who: 'assignee', primary: true },
+  { event: 'resume', label: 'Resume', from: ['On Hold', 'Waiting'], who: 'assignee', primary: true },
+  { event: 'submit', label: 'Send for review', from: ['In Progress'], who: 'assignee', primary: true },
+  { event: 'approve', label: 'Approve', from: ['Submitted'], who: 'reviewer', primary: true },
+  { event: 'reopen', label: 'Reopen', from: ['Rejected'], who: 'reviewer', primary: true },
+  { event: 'pause', label: 'Pause', from: ['In Progress'], who: 'assignee' },
+  { event: 'reject', label: 'Send back', from: ['Submitted'], who: 'reviewer', danger: true },
   {
     event: 'cancel', label: 'Cancel task', who: 'reviewer', danger: true,
     from: ['Pending', 'Assigned', 'Accepted', 'In Progress', 'On Hold', 'Waiting', 'Rejected'],

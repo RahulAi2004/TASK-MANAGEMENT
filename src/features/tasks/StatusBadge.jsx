@@ -1,11 +1,13 @@
-// Task status → chip styling (soft fill + matching hairline border).
+// Task status → chip in plain words ("In review", "Done"…) with soft fill + matching hairline border.
+import { statusLabel } from './taskMeta'
+
 const MAP = {
   Pending: { bg: '#F1F4F9', fg: '#5B6474' },
   Assigned: { bg: '#EAF2FF', fg: '#1A66E5' },
   Accepted: { bg: '#EAF2FF', fg: '#1A66E5' },
   'In Progress': { bg: '#EAF2FF', fg: '#1A66E5' },
   Waiting: { bg: '#FFF4CE', fg: '#8A6D00' },
-  'On Hold': { bg: '#FFF1E0', fg: '#C25E00', label: 'Hold' },
+  'On Hold': { bg: '#FFF1E0', fg: '#C25E00' },
   Submitted: { bg: '#F1EBFD', fg: '#6B47D6' },
   Completed: { bg: '#E7F6EC', fg: '#1E7B34' },
   Rejected: { bg: '#FDE7E9', fg: '#D13438' },
@@ -24,7 +26,7 @@ export default function StatusBadge({ status, size = 'md' }) {
       }
       style={{ background: s.bg, color: s.fg, borderColor: s.fg + '33' }}
     >
-      {s.label || status}
+      {statusLabel(status)}
     </span>
   )
 }

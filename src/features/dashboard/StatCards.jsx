@@ -2,12 +2,12 @@ import { ClipboardList, PlayCircle, Clock, Upload, CheckCircle2, AlertCircle } f
 
 // `filter` is the Task Management status filter a card applies when clicked.
 const CARDS = [
-  { key: 'assigned', label: 'Assigned', icon: ClipboardList, color: '#1A66E5', soft: '#EAF2FF', filter: 'Assigned' },
-  { key: 'inProgress', label: 'In Progress', icon: PlayCircle, color: '#1A66E5', soft: '#EAF2FF', filter: 'In Progress' },
-  { key: 'waiting', label: 'Waiting / On Hold', icon: Clock, color: '#E8A200', soft: '#FFF6DB', filter: 'Waiting / On Hold' },
-  { key: 'submitted', label: 'Submitted', icon: Upload, color: '#6B47D6', soft: '#F1EBFD', filter: 'Submitted' },
-  { key: 'completedToday', label: 'Completed Today', icon: CheckCircle2, color: '#1E9E4A', soft: '#E7F6EC', filter: 'Completed' },
-  { key: 'overdue', label: 'Overdue', icon: AlertCircle, color: '#D13438', soft: '#FDE7E9', filter: 'Overdue' },
+  { key: 'assigned', label: 'To do', icon: ClipboardList, color: '#1A66E5', soft: '#EAF2FF', filter: 'Assigned' },
+  { key: 'inProgress', label: 'In progress', icon: PlayCircle, color: '#1A66E5', soft: '#EAF2FF', filter: 'In Progress' },
+  { key: 'waiting', label: 'Paused or blocked', icon: Clock, color: '#E8A200', soft: '#FFF6DB', filter: 'Waiting / On Hold' },
+  { key: 'submitted', label: 'In review', icon: Upload, color: '#6B47D6', soft: '#F1EBFD', filter: 'Submitted' },
+  { key: 'completedToday', label: 'Done today', icon: CheckCircle2, color: '#1E9E4A', soft: '#E7F6EC', filter: 'Completed' },
+  { key: 'overdue', label: 'Late', icon: AlertCircle, color: '#D13438', soft: '#FDE7E9', filter: 'Overdue' },
 ]
 
 export default function StatCards({ stats, active, onSelect }) {

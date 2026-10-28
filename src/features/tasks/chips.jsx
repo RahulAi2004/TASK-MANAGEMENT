@@ -21,7 +21,7 @@ export function SlaChip({ status }) {
       className="inline-flex whitespace-nowrap rounded-chip border px-1 py-0.5 text-[10px] font-medium"
       style={{ background: s.bg, color: s.fg, borderColor: s.fg + '33' }}
     >
-      {status}
+      {s.label}
     </span>
   )
 }

@@ -1,50 +1,67 @@
+// New Task — a short form by default (what, who, when, priority, instructions); everything else
+// sits under "More details". Only "what" and "who" are required; the rest get sensible defaults.
 import { useEffect, useRef, useState } from 'react'
-import { X, Plus, Trash2, Upload, Bot } from 'lucide-react'
+import { X, Plus, Trash2, ChevronDown, Repeat } from 'lucide-react'
 import { api } from '../../data/api'
 import { useAuth, initials } from '../../auth/AuthContext'
 import VoiceRecorder from '../../components/VoiceRecorder'
 import { CATEGORIES } from './taskMeta'
 
-function SectionHead({ n, title, optional }) {
-  return (
-    <div className="mb-4 flex items-center gap-2.5">
-      <span className="grid h-6 w-6 place-items-center rounded-full bg-accent text-xs font-semibold text-white">
-        {n}
-      </span>
-      <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
-      {optional && <span className="text-xs text-ink-tertiary">(Optional)</span>}
-    </div>
-  )
-}
-
-function Field({ label, required, children }) {
+function Field({ label, hint, required, children }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-ink-secondary">
-        {label} {required && <span className="text-status-danger">*</span>}
+      <span className="mb-1.5 block text-[14px] font-semibold text-ink">
+        {label} {required && <span className="text-[12px] font-normal text-ink-tertiary">(required)</span>}
       </span>
       {children}
+      {hint && <span className="mt-1 block text-[12px] text-ink-tertiary">{hint}</span>}
     </label>
   )
 }
 
 const inputCls =
-  'focus-ring w-full rounded-control border border-border-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-tertiary'
+  'focus-ring w-full rounded-control border border-border-strong bg-surface px-3 py-2.5 text-[14px] text-ink placeholder:text-ink-tertiary'
 
 const TASK_TYPES = [
-  'Background Removal', 'Mockup Creation', 'Production Artwork', 'Artwork Extraction',
+  'General', 'Background Removal', 'Mockup Creation', 'Production Artwork', 'Artwork Extraction',
   'QA Review', 'Gangsheet Preparation', 'Follow-up', 'Bug Fix', 'Hardware', 'Access Request',
 ]
-const ENTITY_TYPES = ['Artwork', 'Sales Order', 'Lead', 'System']
+const ENTITY_TYPES = ['General', 'Artwork', 'Sales Order', 'Lead', 'System']
+const PRIORITIES = [
+  { value: 'Low', tone: '#5B6474' },
+  { value: 'Medium', tone: '#B98500' },
+  { value: 'High', tone: '#E5383B' },
+  { value: 'Urgent', tone: '#B4232A' },
+]
+
+// <input type="datetime-local"> wants local "YYYY-MM-DDTHH:mm".
+const toLocalInput = (d) => {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+const at = (daysAhead, hour = 17) => {
+  const d = new Date()
+  d.setDate(d.getDate() + daysAhead)
+  d.setHours(hour, 0, 0, 0)
+  return toLocalInput(d)
+}
+const DUE_PICKS = [
+  { label: 'Today, 5 PM', value: () => at(0) },
+  { label: 'Tomorrow', value: () => at(1) },
+  { label: 'In 3 days', value: () => at(3) },
+  { label: 'Next week', value: () => at(7) },
+]
 
 export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
   const { user } = useAuth()
   const [assignees, setAssignees] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [missing, setMissing] = useState([])
+  const [moreOpen, setMoreOpen] = useState(false)
   const [form, setForm] = useState({
-    title: '', taskType: '', priority: 'High',
-    entityType: 'Artwork', entityId: '', assignedUserId: '',
+    title: '', taskType: 'General', priority: 'Medium',
+    entityType: 'General', entityId: '', assignedUserId: '',
     category: 'General', customerName: '', routineTaskId: '',
     dueAt: '', estimatedMinutes: '', description: '',
   })
@@ -79,6 +96,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
   useEffect(() => {
     if (!open) return
     setError(null)
+    setMissing([])
     setVoiceNotes([])
     setActiveNote(null)
     setSaveAsTemplate(false)
@@ -93,7 +111,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
       .assignableUsers()
       .then((d) => {
         setAssignees(d.users)
-        setForm((f) => ({ ...f, assignedUserId: f.assignedUserId || d.users[0]?.id || '' }))
+        // No pre-selected person: picking who does the work should be a deliberate choice.
       })
       .catch((e) => setError(e.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,8 +119,9 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
 
   if (!open) return null
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const setValue = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
-  // Routine task → prefill title, description, priority, normal time, and (via its template)
+  // Routine task → prefill title, description, priority, target time, and (via its template)
   // work type + checklist. The server snapshots the routine's SLA thresholds onto the task.
   const routine = routines.find((r) => r.id === form.routineTaskId)
   const pickRoutine = (id) => {
@@ -124,16 +143,22 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
   const hm = (min) => (min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? ' ' + (min % 60) + 'm' : ''}` : `${min}m`)
 
   const submit = async () => {
+    const need = []
+    if (!form.title.trim()) need.push('What needs to be done')
+    if (!form.assignedUserId) need.push('Who should do it')
+    setMissing(need)
+    if (need.length) return
     setBusy(true)
     setError(null)
     const cleanChecklist = checklist.filter((c) => c.item.trim())
+    const taskType = form.taskType || 'General'
     try {
       await api.createTask({
-        title: form.title,
-        taskType: form.taskType,
+        title: form.title.trim(),
+        taskType,
         priority: form.priority,
-        entityType: form.entityType,
-        entityId: form.entityId || 'GENERAL',
+        entityType: form.entityType || 'General',
+        entityId: form.entityId.trim() || 'GENERAL',
         category: form.category,
         customerName: form.customerName.trim() || undefined,
         routineTaskId: form.routineTaskId || undefined,
@@ -152,9 +177,9 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
       if (saveAsTemplate && user.role === 'ADMIN') {
         try {
           await api.createTemplate({
-            name: form.title,
-            taskType: form.taskType,
-            entityType: form.entityType,
+            name: form.title.trim(),
+            taskType,
+            entityType: form.entityType || 'General',
             priority: form.priority,
             description: form.description || undefined,
             estimatedMinutes: form.estimatedMinutes ? Number(form.estimatedMinutes) : undefined,
@@ -164,7 +189,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
           // Task was created; only the template failed (e.g. a template with that
           // name already exists). Keep the panel open so the note is seen.
           onCreated?.()
-          setError('Task created — but template not saved: ' + e.message)
+          setError('Task created — but the template was not saved: ' + e.message)
           setBusy(false)
           return
         }
@@ -179,289 +204,286 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
     }
   }
 
+  const person = assignees.find((a) => a.id === form.assignedUserId)
+  const extrasSet = [
+    form.category !== 'General', form.taskType && form.taskType !== 'General', form.entityId.trim(),
+    form.customerName.trim(), form.estimatedMinutes, checklist.some((c) => c.item.trim()), saveAsTemplate,
+  ].filter(Boolean).length
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-3xl flex-col bg-app shadow-pop">
+      <div className="relative flex h-full w-full max-w-xl flex-col bg-app shadow-pop">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 md:px-6 md:py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-ink">
-              {user.role === 'SALES' ? 'Create Design Task' : 'Create New Task'}
-            </h2>
-            <p className="hidden text-xs text-ink-secondary md:block">
-              {user.role === 'SALES'
-                ? 'Assign a design task to a designer with clear instructions.'
-                : 'Assign a new task to anyone in the organization.'}
-            </p>
+            <h2 className="text-lg font-semibold text-ink">{user.role === 'SALES' ? 'New design task' : 'New task'}</h2>
+            <p className="text-[13px] text-ink-secondary">Fill in what, who and when — that’s all you need.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="focus-ring hidden rounded-control border border-border-strong bg-surface px-4 py-2 text-sm font-medium text-ink-secondary hover:bg-subtle md:block"
+          <button onClick={onClose} aria-label="Close" className="focus-ring grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          {error && (
+            <div className="rounded-control border border-status-danger/30 bg-status-dangersoft px-4 py-2 text-sm text-status-danger">{error}</div>
+          )}
+
+          {routines.length > 0 && (
+            <div className="rounded-card border border-accent-softborder bg-accent-soft/40 p-3.5">
+              <Field label="Start from a routine task" hint="Optional — fills in the title, instructions and time limits for a task you do often.">
+                <span className="relative block">
+                  <Repeat size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-accent" />
+                  <select className={inputCls + ' pl-9'} value={form.routineTaskId} onChange={(e) => pickRoutine(e.target.value)}>
+                    <option value="">No — a new, one-off task</option>
+                    {routines.map((r) => (
+                      <option key={r.id} value={r.id}>{r.title} · {r.department?.name}</option>
+                    ))}
+                  </select>
+                </span>
+              </Field>
+              {routine && (
+                <p className="mt-2 text-[12px] text-ink-secondary">
+                  Target {hm(routine.normalMinutes)} · at risk after {hm(routine.criticalMinutes)} · delayed after {hm(routine.delayedMinutes)} · goes to {routine.department?.name}
+                </p>
+              )}
+            </div>
+          )}
+
+          <Field label="What needs to be done?" required>
+            <input
+              className={inputCls + (missing.includes('What needs to be done') ? ' border-status-danger' : '')}
+              value={form.title}
+              onChange={set('title')}
+              maxLength={255}
+              placeholder="e.g. Check print placement for order SO-7819"
+            />
+          </Field>
+
+          <Field label="Who should do it?" required>
+            <select
+              className={inputCls + (missing.includes('Who should do it') ? ' border-status-danger' : '')}
+              value={form.assignedUserId}
+              onChange={set('assignedUserId')}
             >
+              <option value="">{assignees.length ? 'Choose a person…' : 'Nobody available to assign'}</option>
+              {assignees.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} — {u.title || u.role.toLowerCase()}
+                </option>
+              ))}
+            </select>
+            {person && (
+              <span className="mt-2 flex items-center gap-2.5 text-[12px] text-ink-secondary">
+                <span className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white" style={{ background: person.color }}>
+                  {initials(person.name)}
+                </span>
+                {person.openTasks === 0 ? 'Has no open tasks right now' : `Has ${person.openTasks} open task${person.openTasks === 1 ? '' : 's'}`}
+                {person.overdue > 0 && <span className="text-status-danger">· {person.overdue} late</span>}
+              </span>
+            )}
+          </Field>
+
+          <Field label="When is it due?" hint="Leave empty if there is no deadline.">
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {DUE_PICKS.map((d) => {
+                const value = d.value()
+                const on = form.dueAt === value
+                return (
+                  <button
+                    key={d.label}
+                    type="button"
+                    onClick={() => setValue('dueAt', on ? '' : value)}
+                    className={'focus-ring rounded-full border px-3 py-1 text-[13px] ' + (on ? 'border-accent bg-accent text-white' : 'border-border-strong text-ink-secondary hover:bg-subtle')}
+                  >
+                    {d.label}
+                  </button>
+                )
+              })}
+            </div>
+            <input className={inputCls} type="datetime-local" value={form.dueAt} onChange={set('dueAt')} />
+          </Field>
+
+          <div>
+            <span className="mb-1.5 block text-[14px] font-semibold text-ink">How urgent is it?</span>
+            <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Priority">
+              {PRIORITIES.map((p) => {
+                const on = form.priority === p.value
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setValue('priority', p.value)}
+                    className={'focus-ring rounded-control border py-2 text-[13px] font-medium ' + (on ? 'text-white' : 'border-border-strong bg-surface text-ink-secondary hover:bg-subtle')}
+                    style={on ? { background: p.tone, borderColor: p.tone } : undefined}
+                  >
+                    {p.value}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <Field label="Instructions" hint="Type them, or record a voice note below.">
+            <textarea
+              className={inputCls + ' h-24 resize-none'}
+              value={form.description}
+              onChange={set('description')}
+              placeholder="e.g. Compare the printed sample with the approved mockup and note any differences."
+            />
+          </Field>
+          <div className="-mt-2 space-y-2">
+            {voiceNotes.map((n, i) => (
+              <div key={i} className="space-y-1 rounded-control bg-subtle p-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 shrink-0 text-xs font-semibold text-ink-tertiary">#{i + 1}</span>
+                  <audio controls src={n.audio} className="h-9 min-w-0 flex-1" />
+                  <button
+                    type="button"
+                    title="Delete voice note"
+                    onClick={() => setVoiceNotes((list) => list.filter((_, j) => j !== i))}
+                    className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-control text-ink-tertiary hover:bg-surface hover:text-status-danger"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                {n.transcript && <p className="pl-7 text-xs italic leading-relaxed text-ink-secondary">"{n.transcript}"</p>}
+              </div>
+            ))}
+            {voiceNotes.length + (activeNote ? 1 : 0) < MAX_VOICE_NOTES && (
+              <>
+                <VoiceRecorder value={activeNote?.audio || null} onChange={onVoice} />
+                {activeNote?.transcript && (
+                  <p className="rounded-control bg-subtle p-2.5 text-xs italic leading-relaxed text-ink-secondary">"{activeNote.transcript}"</p>
+                )}
+                {activeNote && (
+                  <button type="button" onClick={addAnotherNote} className="focus-ring flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+                    <Plus size={14} /> Record another voice note
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Everything else, out of the way until needed */}
+          <div className="rounded-card border border-border bg-surface">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-expanded={moreOpen}
+              className="focus-ring flex w-full items-center justify-between rounded-card px-4 py-3 text-left"
+            >
+              <span>
+                <span className="block text-[14px] font-semibold text-ink">More details</span>
+                <span className="block text-[12px] text-ink-tertiary">
+                  Optional — category, linked order, customer, target time, checklist{extrasSet ? ` · ${extrasSet} filled in` : ''}
+                </span>
+              </span>
+              <ChevronDown size={18} className={'shrink-0 text-ink-secondary transition-transform ' + (moreOpen ? 'rotate-180' : '')} />
+            </button>
+            {moreOpen && (
+              <div className="space-y-4 border-t border-border p-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Category">
+                    <select className={inputCls} value={form.category} onChange={set('category')}>
+                      {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Type of work">
+                    <select className={inputCls} value={form.taskType} onChange={set('taskType')}>
+                      {TASK_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Linked to">
+                    <select
+                      className={inputCls}
+                      value={form.entityType}
+                      onChange={(e) => {
+                        const entityType = e.target.value
+                        // Order records default to "Order Related"; the user can still change it.
+                        setForm((f) => ({ ...f, entityType, category: entityType === 'Sales Order' ? 'Order Related' : f.category }))
+                      }}
+                    >
+                      {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t === 'General' ? 'Nothing specific' : t}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Order / reference number">
+                    <input className={inputCls} value={form.entityId} onChange={set('entityId')} placeholder="e.g. SO-7819" />
+                  </Field>
+                  <Field label="Customer">
+                    <input className={inputCls} value={form.customerName} onChange={set('customerName')} maxLength={160} placeholder="e.g. Bright Wear Co." />
+                  </Field>
+                  <Field label="Target time (minutes)" hint="How long it should normally take.">
+                    <input className={inputCls} type="number" min="1" value={form.estimatedMinutes} onChange={set('estimatedMinutes')} placeholder="e.g. 45" />
+                  </Field>
+                </div>
+
+                <div>
+                  <span className="mb-1.5 block text-[14px] font-semibold text-ink">Checklist</span>
+                  <div className="space-y-2">
+                    {checklist.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          className={inputCls + ' flex-1'}
+                          value={c.item}
+                          placeholder={`Step ${i + 1}`}
+                          onChange={(e) => setChecklist((l) => l.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))}
+                        />
+                        <button
+                          type="button"
+                          title="Remove step"
+                          onClick={() => setChecklist((l) => l.filter((_, j) => j !== i))}
+                          className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-control text-ink-tertiary hover:bg-subtle hover:text-status-danger"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setChecklist((l) => [...l, { item: '', isRequired: true }])}
+                    className="focus-ring mt-2 flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+                  >
+                    <Plus size={14} /> Add a step
+                  </button>
+                </div>
+
+                {user.role === 'ADMIN' && (
+                  <label className="flex cursor-pointer items-start gap-2.5 text-[13px] text-ink-secondary">
+                    <input
+                      type="checkbox"
+                      checked={saveAsTemplate}
+                      onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border-strong accent-accent"
+                    />
+                    <span>Also save this as a template, so it can be reused from <span className="font-medium text-ink">Task Templates</span>.</span>
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer: always visible; says what's missing instead of silently disabling */}
+        <div className="border-t border-border bg-surface px-5 py-3">
+          {missing.length > 0 && (
+            <p className="mb-2 text-[13px] text-status-danger">Please fill in: {missing.join(' and ')}.</p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="focus-ring rounded-control border border-border-strong bg-surface px-4 py-2.5 text-sm font-medium text-ink-secondary hover:bg-subtle">
               Cancel
             </button>
             <button
               onClick={submit}
-              disabled={busy || !form.title || !form.taskType || !form.assignedUserId}
-              className="focus-ring rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+              disabled={busy}
+              className="focus-ring rounded-control bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
             >
-              {busy ? 'Creating…' : saveAsTemplate ? 'Create Task + Template' : 'Create Task'}
+              {busy ? 'Creating…' : saveAsTemplate ? 'Create task + template' : 'Create task'}
             </button>
-            <button
-              onClick={onClose}
-              className="focus-ring ml-1 grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mx-6 mt-4 rounded-control border border-status-danger/30 bg-status-dangersoft px-4 py-2 text-sm text-status-danger">
-            {error}
-          </div>
-        )}
-
-        <div className="grid flex-1 grid-cols-1 gap-5 overflow-y-auto p-4 pb-10 md:grid-cols-2 md:p-6">
-          {/* Left column */}
-          <div className="space-y-6">
-            <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-              <SectionHead n={1} title="Task Information" />
-              {routines.length > 0 && (
-                <div className="mb-4">
-                  <Field label="Routine Task">
-                    <select className={inputCls} value={form.routineTaskId} onChange={(e) => pickRoutine(e.target.value)}>
-                      <option value="">None — custom task</option>
-                      {routines.map((r) => (
-                        <option key={r.id} value={r.id}>{r.title} · {r.department?.name}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  {routine && (
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
-                      <span className="text-ink-tertiary">SLA</span>
-                      <span className="rounded-chip bg-[#E7F6EC] px-1.5 py-0.5 text-[#1E7B34]">Normal {hm(routine.normalMinutes)}</span>
-                      <span className="rounded-chip bg-[#FFF1E0] px-1.5 py-0.5 text-[#C25E00]">Critical {hm(routine.criticalMinutes)}</span>
-                      <span className="rounded-chip bg-[#FDE7E9] px-1.5 py-0.5 text-[#D13438]">Delayed {hm(routine.delayedMinutes)}</span>
-                      <span className="text-ink-tertiary">· routed to {routine.department?.name}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Field label="Task Title" required>
-                    <input className={inputCls} value={form.title} onChange={set('title')} placeholder="e.g. Background Removal" />
-                  </Field>
-                </div>
-                <Field label="Task Type" required>
-                  <select className={inputCls} value={form.category} onChange={set('category')}>
-                    {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                  </select>
-                </Field>
-                <Field label="Work Type" required>
-                  <select className={inputCls} value={form.taskType} onChange={set('taskType')}>
-                    <option value="">Select work type</option>
-                    {TASK_TYPES.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </Field>
-                <Field label="Priority" required>
-                  <select className={inputCls} value={form.priority} onChange={set('priority')}>
-                    {['Urgent', 'High', 'Medium', 'Low'].map((p) => <option key={p}>{p}</option>)}
-                  </select>
-                </Field>
-                <Field label="Related Module" required>
-                  <select
-                    className={inputCls}
-                    value={form.entityType}
-                    onChange={(e) => {
-                      const entityType = e.target.value
-                      // Order records default to "Order Related"; the user can still change it.
-                      setForm((f) => ({ ...f, entityType, category: entityType === 'Sales Order' ? 'Order Related' : f.category }))
-                    }}
-                  >
-                    {ENTITY_TYPES.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </Field>
-                <Field label="Related Record" required>
-                  <input className={inputCls} value={form.entityId} onChange={set('entityId')} placeholder="AW-2026-000125" />
-                </Field>
-                <Field label="Customer Name">
-                  <input className={inputCls} value={form.customerName} onChange={set('customerName')} maxLength={160} placeholder="e.g. Bright Wear Co." />
-                </Field>
-              </div>
-            </section>
-
-            <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-              <SectionHead n={2} title="Assignment" />
-              <Field label="Assign To" required>
-                <select className={inputCls} value={form.assignedUserId} onChange={set('assignedUserId')}>
-                  {assignees.length === 0 && <option value="">No assignable users</option>}
-                  {assignees.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.role.toLowerCase()}) · {u.openTasks} open · {u.dueToday} due today
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {form.assignedUserId && (
-                <div className="mt-3 flex items-center gap-2.5 rounded-control bg-subtle p-3">
-                  {(() => {
-                    const u = assignees.find((a) => a.id === form.assignedUserId)
-                    if (!u) return null
-                    return (
-                      <>
-                        <div
-                          className="grid h-8 w-8 place-items-center rounded-full text-xs font-semibold text-white"
-                          style={{ background: u.color }}
-                        >
-                          {initials(u.name)}
-                        </div>
-                        <div className="text-xs leading-tight">
-                          <div className="font-semibold text-ink">{u.name}</div>
-                          <div className="text-ink-tertiary">
-                            {u.title} · {u.openTasks} open task{u.openTasks !== 1 && 's'} · {u.overdue} overdue
-                          </div>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-              <SectionHead n={3} title="Schedule & SLA" />
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Due Date & Time" required>
-                  <input className={inputCls} type="datetime-local" value={form.dueAt} onChange={set('dueAt')} />
-                </Field>
-                <Field label="Normal Time (min)">
-                  <input className={inputCls} type="number" value={form.estimatedMinutes} onChange={set('estimatedMinutes')} placeholder="45" />
-                </Field>
-              </div>
-            </section>
-          </div>
-
-          {/* Right column */}
-          <div className="space-y-6">
-            <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-              <SectionHead n={4} title="Checklist" optional />
-              <div className="space-y-2">
-                {checklist.map((c, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      className={inputCls + ' flex-1'}
-                      value={c.item}
-                      placeholder={`Checklist item ${i + 1}`}
-                      onChange={(e) =>
-                        setChecklist((l) => l.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))
-                      }
-                    />
-                    <button
-                      onClick={() => setChecklist((l) => l.filter((_, j) => j !== i))}
-                      className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-control text-ink-tertiary hover:bg-subtle hover:text-status-danger"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => setChecklist((l) => [...l, { item: '', isRequired: true }])}
-                className="focus-ring mt-3 flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
-              >
-                <Plus size={14} /> Add Item
-              </button>
-            </section>
-
-            <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-              <SectionHead n={5} title="Instructions" />
-              <textarea
-                className={inputCls + ' h-28 resize-none'}
-                value={form.description}
-                onChange={set('description')}
-                placeholder="Remove the white background from the artwork. Clean the edges. Save as transparent PNG."
-              />
-              <div className="mt-3 space-y-2">
-                {voiceNotes.map((n, i) => (
-                  <div key={i} className="space-y-1 rounded-control bg-subtle p-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 shrink-0 text-xs font-semibold text-ink-tertiary">#{i + 1}</span>
-                      <audio controls src={n.audio} className="h-9 min-w-0 flex-1" />
-                      <button
-                        type="button"
-                        title="Delete voice note"
-                        onClick={() => setVoiceNotes((list) => list.filter((_, j) => j !== i))}
-                        className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-control text-ink-tertiary hover:bg-surface hover:text-status-danger"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                    {n.transcript && (
-                      <p className="pl-7 text-xs italic leading-relaxed text-ink-secondary">"{n.transcript}"</p>
-                    )}
-                  </div>
-                ))}
-                {voiceNotes.length + (activeNote ? 1 : 0) < MAX_VOICE_NOTES && (
-                  <>
-                    <VoiceRecorder value={activeNote?.audio || null} onChange={onVoice} />
-                    {activeNote?.transcript && (
-                      <p className="rounded-control bg-subtle p-2.5 text-xs italic leading-relaxed text-ink-secondary">
-                        "{activeNote.transcript}"
-                      </p>
-                    )}
-                    {activeNote && (
-                      <button
-                        type="button"
-                        onClick={addAnotherNote}
-                        className="focus-ring flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
-                      >
-                        <Plus size={14} /> Record another voice note
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-              <SectionHead n={6} title="Attachments" optional />
-              <div className="grid place-items-center rounded-control border-2 border-dashed border-border-strong bg-subtle py-6 text-center text-sm text-ink-secondary opacity-60">
-                <Upload size={20} className="mb-1 text-ink-tertiary" />
-                File uploads arrive with the storage service
-              </div>
-            </section>
-
-            <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-              <SectionHead n={7} title="Automation & AI" optional />
-              <div className="flex items-center gap-2 text-sm text-ink-secondary opacity-60">
-                <Bot size={16} className="text-accent" /> AI First Attempt — enabled per template in a later phase
-              </div>
-            </section>
-
-            {user.role === 'ADMIN' && (
-              <section className="rounded-card border border-border bg-surface p-5 shadow-card">
-                <SectionHead n={8} title="Save as Template" optional />
-                <label className="flex cursor-pointer items-start gap-2.5 text-sm text-ink-secondary">
-                  <input
-                    type="checkbox"
-                    checked={saveAsTemplate}
-                    onChange={(e) => setSaveAsTemplate(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-border-strong accent-accent"
-                  />
-                  <span>
-                    Also save these details as a reusable template — it will appear under{' '}
-                    <span className="font-medium text-ink">Task Templates</span> for next time.
-                    <span className="mt-1 block text-xs text-ink-tertiary">
-                      Saves the title, type, priority, module, instructions and checklist.
-                    </span>
-                  </span>
-                </label>
-              </section>
-            )}
           </div>
         </div>
       </div>

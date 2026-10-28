@@ -5,7 +5,7 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  X, ChevronDown, AlertCircle, Clock, CheckCircle2, Mic, Paperclip, Play, Pause,
+  X, AlertCircle, Clock, CheckCircle2, Mic, Paperclip, Play, Pause,
   MoreHorizontal, Pencil, ExternalLink, Download, Trash2,
 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
@@ -15,7 +15,7 @@ import { CategoryChip } from './chips'
 import useNow from './useNow'
 import {
   taskMeta, taskCategory, elapsedMs, slaStatus, SLA_STYLE, fmtDuration, fmtMinutes, fmtDate,
-  fmtTime, fmtClock, allowedEvents, DELAY_REASONS,
+  fmtTime, fmtClock, allowedEvents, statusSentence, DELAY_REASONS,
 } from './taskMeta'
 import { api } from '../../data/api'
 import { useApi, useAuth, initials } from '../../auth/AuthContext'
@@ -95,11 +95,9 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
   }
 
   // ── Status actions ────────────────────────────────────────────────────────
-  const [menuOpen, setMenuOpen] = useState(false)
   const [pending, setPending] = useState(null) // { event, label } needing a note (submit / reject)
   const [pendingText, setPendingText] = useState('')
   const fire = async (x) => {
-    setMenuOpen(false)
     if (x.event === 'submit' || x.event === 'reject') {
       setPending(x)
       setPendingText('')
@@ -193,7 +191,8 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
     const slaStyle = sla ? SLA_STYLE[sla] : null
     const SlaIcon = sla ? SLA_ICON[sla] : null
     const events = allowedEvents(t, user)
-    const showDelay = sla === 'Delayed' || sla === 'Critical' || meta.delay
+    // Only ask for a reason once a task is actually late (or one was already given).
+    const showDelay = sla === 'Delayed' || meta.delay
     const isOpen = !['Completed', 'Cancelled'].includes(t.status)
     const recordings = [
       ...(t.voiceNote
@@ -208,57 +207,69 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
       <div className="space-y-3 p-4">
         {/* Title + status */}
         <div className="px-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-accent">{t.taskNo}</div>
-              <h2 className="mt-0.5 text-xl font-semibold leading-snug text-ink">{t.title}</h2>
-              <div className="mt-0.5 text-xs text-ink-tertiary">{t.taskType}</div>
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-ink-tertiary">
+              {t.taskNo}
+              {t.taskType && t.taskType !== 'General' ? ' · ' + t.taskType : ''}
             </div>
-            <div className="relative shrink-0">
-              {events.length > 0 ? (
-                <button
-                  onClick={() => setMenuOpen((o) => !o)}
-                  disabled={busy}
-                  className="focus-ring flex items-center gap-1.5 rounded-control border border-accent-softborder bg-accent-soft px-3 py-2 text-[13px] font-medium text-accent hover:bg-accent-softborder/60 disabled:opacity-60"
-                >
-                  {t.status} <ChevronDown size={15} />
-                </button>
-              ) : (
-                <StatusBadge status={t.status} />
-              )}
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-card border border-border bg-surface py-1 shadow-pop">
-                    {events.map((x) => (
-                      <button
-                        key={x.event}
-                        onClick={() => fire(x)}
-                        className={
-                          'block w-full px-3 py-2 text-left text-sm hover:bg-subtle ' +
-                          (x.danger ? 'text-status-danger' : 'text-ink')
-                        }
-                      >
-                        {x.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+            <h2 className="mt-0.5 text-xl font-semibold leading-snug text-ink">{t.title}</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusBadge status={t.status} />
+              <span className="text-[13px] text-ink-secondary">{statusSentence(t, user)}</span>
             </div>
           </div>
+
+          {/* Next step: the action that moves the task forward is a big button, the rest sit beside it. */}
+          {events.length > 0 && !pending && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {events.filter((x) => x.primary).map((x) => (
+                <button
+                  key={x.event}
+                  onClick={() => fire(x)}
+                  disabled={busy}
+                  className="focus-ring flex h-10 items-center gap-1.5 rounded-control bg-accent px-4 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
+                >
+                  {x.event === 'start' || x.event === 'resume' ? <Play size={15} fill="currentColor" /> : null}
+                  {x.label}
+                </button>
+              ))}
+              {events.filter((x) => !x.primary && x.event !== 'cancel').map((x) => (
+                <button
+                  key={x.event}
+                  onClick={() => fire(x)}
+                  disabled={busy}
+                  className={
+                    'focus-ring h-10 rounded-control border px-3.5 text-[13px] font-medium disabled:opacity-60 ' +
+                    (x.danger ? 'border-status-danger/30 text-status-danger hover:bg-status-dangersoft' : 'border-border-strong text-ink-secondary hover:bg-subtle')
+                  }
+                >
+                  {x.label}
+                </button>
+              ))}
+              {/* Cancelling is rare and final — a quiet link, not a button next to the main action. */}
+              {events.some((x) => x.event === 'cancel') && (
+                <button
+                  onClick={() => fire(events.find((x) => x.event === 'cancel'))}
+                  disabled={busy}
+                  className="focus-ring ml-auto rounded-control px-2 py-1 text-[12px] text-ink-tertiary underline-offset-2 hover:text-status-danger hover:underline disabled:opacity-60"
+                >
+                  Cancel task
+                </button>
+              )}
+            </div>
+          )}
 
           {pending && (
             <div className="mt-3 rounded-card border border-accent-softborder bg-accent-soft/50 p-3">
               <div className="mb-1.5 text-[13px] font-semibold text-ink">
-                {pending.event === 'submit' ? 'Submit for review' : 'Reject submission'}
+                {pending.event === 'submit' ? 'Send for review' : 'Send back for changes'}
               </div>
               <textarea
                 autoFocus
                 value={pendingText}
                 onChange={(e) => setPendingText(e.target.value)}
                 maxLength={2000}
-                placeholder={pending.event === 'submit' ? 'Completion summary — what was done (optional)' : 'What needs to change? (optional)'}
+                placeholder={pending.event === 'submit' ? 'What did you do? (optional)' : 'What needs to change? (optional)'}
                 className={inputCls + ' h-20 resize-none'}
               />
               <div className="mt-2 flex justify-end gap-2">
@@ -273,7 +284,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                     (pending.event === 'reject' ? 'bg-status-danger' : 'bg-accent hover:bg-accent-hover')
                   }
                 >
-                  {pending.event === 'submit' ? 'Submit' : 'Reject'}
+                  {pending.event === 'submit' ? 'Send' : 'Send back'}
                 </button>
               </div>
             </div>
@@ -289,10 +300,10 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
           >
             <AlertCircle size={22} className="mt-0.5 shrink-0" />
             <div className="text-[13px] leading-snug">
-              <div className="text-[15px] font-semibold">{sla}</div>
+              <div className="text-[15px] font-semibold">{slaStyle.label}</div>
               {meta.delay
                 ? <>Reason recorded: {meta.delay.reason}</>
-                : sla === 'Delayed' ? 'Task is delayed. Please provide a reason.' : 'Task is close to its SLA limit.'}
+                : sla === 'Delayed' ? 'Task is delayed. Please provide a reason.' : 'This task is close to its time limit.'}
             </div>
           </div>
         )}
@@ -306,80 +317,35 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                 style={{ background: slaStyle.bg, color: slaStyle.fg }}
                 title={slaStyle.hint}
               >
-                <SlaIcon size={17} /> {sla}
+                <SlaIcon size={17} /> {slaStyle.label}
               </span>
             ) : (
               <span className="text-[15px] font-semibold text-ink-tertiary">—</span>
             )}
-            <div className="mt-1 text-xs text-ink-secondary">SLA Status</div>
+            <div className="mt-1 text-xs text-ink-secondary">On time?</div>
           </div>
           <div className="px-2">
             <div className="text-[19px] font-semibold text-ink">{t.startedAt ? fmtDuration(elapsedMs(t, now)) : '—'}</div>
-            <div className="mt-0.5 text-xs text-ink-secondary">{t.startedAt ? 'Elapsed Time' : 'Not started'}</div>
+            <div className="mt-0.5 text-xs text-ink-secondary">{t.startedAt ? 'Time spent' : 'Not started yet'}</div>
           </div>
           <div className="px-2">
             <div className="text-[19px] font-semibold text-ink">{fmtMinutes(t.estimatedMinutes)}</div>
-            <div className="mt-0.5 text-xs text-ink-secondary">Normal Time (Target)</div>
+            <div className="mt-0.5 text-xs text-ink-secondary">Target time</div>
           </div>
         </div>
-
-        {/* Task information */}
-        <section className={card}>
-          <h3 className="mb-1.5 text-[15px] font-semibold text-ink">Task Information</h3>
-          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 sm:divide-x sm:divide-border">
-            <div>
-              <Row label="Task Type"><CategoryChip category={taskCategory(t)} /></Row>
-              <Row label="Module">{t.department?.name || '—'}</Row>
-              <Row label="Entity / Order"><span className="font-medium text-accent">{t.entityId}</span></Row>
-              <Row label="Customer Name">{meta.customerName || '—'}</Row>
-              <Row label="Priority"><PriorityFlag priority={t.priority} /></Row>
-            </div>
-            <div className="sm:pl-4">
-              <Row label="Task Status"><StatusBadge status={t.status} size="sm" /></Row>
-              <Row label="Created at">
-                <span className="block whitespace-nowrap leading-tight">{fmtDate(t.createdAt)}</span>
-                <span className="block text-xs leading-tight text-ink-secondary">{fmtTime(t.createdAt)}</span>
-              </Row>
-              <Row label="Due at">
-                {t.dueAt ? (
-                  <span className={sla === 'Delayed' && isOpen ? 'font-medium text-status-danger' : ''}>
-                    <span className="block whitespace-nowrap leading-tight">{fmtDate(t.dueAt)}</span>
-                    <span className="block text-xs leading-tight opacity-80">{fmtTime(t.dueAt)}</span>
-                  </span>
-                ) : '—'}
-              </Row>
-            </div>
-          </div>
-          {/* People get a full-width row: names are often too long for half the panel. */}
-          <div className="mt-2 grid grid-cols-2 gap-3 border-t border-border pt-3">
-            {[['Owner', t.assignedUser], ['Assigned by', t.createdBy]].map(([label, u]) => (
-              <div key={label} className="min-w-0">
-                <div className="mb-1 text-[13px] text-ink-secondary">{label}</div>
-                {u ? (
-                  <div className="flex items-center gap-2">
-                    <Avatar u={u} />
-                    <span className="min-w-0 break-words text-[13px] leading-tight text-ink">{u.name}</span>
-                  </div>
-                ) : (
-                  <span className="text-[13px] text-ink-tertiary">Unassigned</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
 
         {/* Description · current status · delay */}
         <section className={card + ' space-y-4'}>
           <div>
-            <h3 className="mb-1.5 text-[15px] font-semibold text-ink">Description</h3>
+            <h3 className="mb-1.5 text-[15px] font-semibold text-ink">What to do</h3>
             <p className="whitespace-pre-wrap rounded-control bg-subtle px-3 py-2.5 text-[13px] leading-relaxed text-ink-secondary">
-              {t.description || 'No description provided.'}
+              {t.description || 'No instructions were added.'}
             </p>
           </div>
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <h3 className="text-[15px] font-semibold text-ink">Issue / Current status</h3>
+              <h3 className="text-[15px] font-semibold text-ink">Latest update</h3>
               {!editingStatus && isOpen && (
                 <button
                   onClick={() => { setStatusText(meta.currentStatus || ''); setEditingStatus(true) }}
@@ -396,7 +362,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                   value={statusText}
                   onChange={(e) => setStatusText(e.target.value)}
                   maxLength={500}
-                  placeholder="What is happening on this task right now?"
+                  placeholder="Where does this task stand right now? Anything blocking it?"
                   className={inputCls + ' h-20 resize-none'}
                 />
                 <div className="mt-1.5 flex justify-end gap-2">
@@ -406,7 +372,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
               </div>
             ) : (
               <p className="rounded-control bg-subtle px-3 py-2.5 text-[13px] text-ink-secondary">
-                {meta.currentStatus || <span className="text-ink-tertiary">No status update yet.</span>}
+                {meta.currentStatus || <span className="text-ink-tertiary">No update yet.</span>}
               </p>
             )}
           </div>
@@ -424,9 +390,10 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
               )}
               {isOpen && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <h3 className="text-[15px] font-semibold text-ink sm:col-span-2">Why is this late?</h3>
                   <label className="block">
                     <span className="mb-1.5 block text-[13px] font-semibold text-ink">
-                      Reason for delay <span className="text-status-danger">*</span>
+                      Reason
                     </span>
                     <select value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls}>
                       <option value="">Select a reason</option>
@@ -435,14 +402,14 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-[13px] font-semibold text-ink">
-                      Remarks <span className="text-status-danger">*</span>
+                      More details
                     </span>
                     <div className="relative">
                       <textarea
                         value={remarks}
                         onChange={(e) => setRemarks(e.target.value)}
                         maxLength={500}
-                        placeholder="Enter remarks / additional details…"
+                        placeholder="A sentence or two for your manager…"
                         className={inputCls + ' h-[74px] resize-none pb-5'}
                       />
                       <span className="pointer-events-none absolute bottom-1.5 right-2.5 text-[11px] text-ink-tertiary">{remarks.length}/500</span>
@@ -454,13 +421,57 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                       disabled={busy || !reason || !remarks.trim()}
                       className="focus-ring rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
                     >
-                      {meta.delay ? 'Update delay reason' : 'Save delay reason'}
+                      {meta.delay ? 'Update reason' : 'Save reason'}
                     </button>
                   </div>
                 </div>
               )}
             </div>
           )}
+        </section>
+
+        {/* Task information */}
+        <section className={card}>
+          <h3 className="mb-1.5 text-[15px] font-semibold text-ink">Details</h3>
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 sm:divide-x sm:divide-border">
+            <div>
+              <Row label="Category"><CategoryChip category={taskCategory(t)} /></Row>
+              <Row label="Department">{t.department?.name || '—'}</Row>
+              <Row label="Order / Ref"><span className="font-medium text-accent">{t.entityId}</span></Row>
+              <Row label="Customer">{meta.customerName || '—'}</Row>
+              <Row label="Priority"><PriorityFlag priority={t.priority} /></Row>
+            </div>
+            <div className="sm:pl-4">
+                            <Row label="Created">
+                <span className="block whitespace-nowrap leading-tight">{fmtDate(t.createdAt)}</span>
+                <span className="block text-xs leading-tight text-ink-secondary">{fmtTime(t.createdAt)}</span>
+              </Row>
+              <Row label="Due">
+                {t.dueAt ? (
+                  <span className={sla === 'Delayed' && isOpen ? 'font-medium text-status-danger' : ''}>
+                    <span className="block whitespace-nowrap leading-tight">{fmtDate(t.dueAt)}</span>
+                    <span className="block text-xs leading-tight opacity-80">{fmtTime(t.dueAt)}</span>
+                  </span>
+                ) : '—'}
+              </Row>
+            </div>
+          </div>
+          {/* People get a full-width row: names are often too long for half the panel. */}
+          <div className="mt-2 grid grid-cols-2 gap-3 border-t border-border pt-3">
+            {[['Assigned to', t.assignedUser], ['Created by', t.createdBy]].map(([label, u]) => (
+              <div key={label} className="min-w-0">
+                <div className="mb-1 text-[13px] text-ink-secondary">{label}</div>
+                {u ? (
+                  <div className="flex items-center gap-2">
+                    <Avatar u={u} />
+                    <span className="min-w-0 break-words text-[13px] leading-tight text-ink">{u.name}</span>
+                  </div>
+                ) : (
+                  <span className="text-[13px] text-ink-tertiary">Nobody yet</span>
+                )}
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* Recordings */}
