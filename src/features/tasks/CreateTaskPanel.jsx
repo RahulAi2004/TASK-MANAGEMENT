@@ -6,15 +6,16 @@ import { api } from '../../data/api'
 import { useAuth, initials } from '../../auth/AuthContext'
 import VoiceRecorder from '../../components/VoiceRecorder'
 import { CATEGORIES } from './taskMeta'
+import { t as tr } from '../../i18n'
 
 function Field({ label, hint, required, children }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-[14px] font-semibold text-ink">
-        {label} {required && <span className="text-[12px] font-normal text-ink-tertiary">(required)</span>}
+        {tr(label)} {required && <span className="text-[12px] font-normal text-ink-tertiary">{tr('(required)')}</span>}
       </span>
       {children}
-      {hint && <span className="mt-1 block text-[12px] text-ink-tertiary">{hint}</span>}
+      {hint && <span className="mt-1 block text-[12px] text-ink-tertiary">{tr(hint)}</span>}
     </label>
   )
 }
@@ -189,7 +190,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
           // Task was created; only the template failed (e.g. a template with that
           // name already exists). Keep the panel open so the note is seen.
           onCreated?.()
-          setError('Task created — but the template was not saved: ' + e.message)
+          setError(tr('Task created — but the template was not saved:') + ' ' + e.message)
           setBusy(false)
           return
         }
@@ -217,10 +218,10 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
         {/* Header */}
         <div className="flex items-center justify-between gap-3 border-b border-border bg-surface px-5 py-4">
           <div>
-            <h2 className="text-lg font-semibold text-ink">{user.role === 'SALES' ? 'New design task' : 'New task'}</h2>
-            <p className="text-[13px] text-ink-secondary">Fill in what, who and when — that’s all you need.</p>
+            <h2 className="text-lg font-semibold text-ink">{user.role === 'SALES' ? tr('New design task') : tr('New task')}</h2>
+            <p className="text-[13px] text-ink-secondary">{tr("Fill in what, who and when — that’s all you need.")}</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="focus-ring grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle">
+          <button onClick={onClose} aria-label={tr("Close")} className="focus-ring grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle">
             <X size={18} />
           </button>
         </div>
@@ -236,7 +237,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 <span className="relative block">
                   <Repeat size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-accent" />
                   <select className={inputCls + ' pl-9'} value={form.routineTaskId} onChange={(e) => pickRoutine(e.target.value)}>
-                    <option value="">No — a new, one-off task</option>
+                    <option value="">{tr("No — a new, one-off task")}</option>
                     {routines.map((r) => (
                       <option key={r.id} value={r.id}>{r.title} · {r.department?.name}</option>
                     ))}
@@ -245,7 +246,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               </Field>
               {routine && (
                 <p className="mt-2 text-[12px] text-ink-secondary">
-                  Target {hm(routine.normalMinutes)} · at risk after {hm(routine.criticalMinutes)} · delayed after {hm(routine.delayedMinutes)} · goes to {routine.department?.name}
+                  {tr('Target {a} · at risk after {b} · delayed after {c} · goes to {d}', { a: hm(routine.normalMinutes), b: hm(routine.criticalMinutes), c: hm(routine.delayedMinutes), d: routine.department?.name })}
                 </p>
               )}
             </div>
@@ -257,7 +258,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               value={form.title}
               onChange={set('title')}
               maxLength={255}
-              placeholder="e.g. Check print placement for order SO-7819"
+              placeholder={tr("e.g. Check print placement for order SO-7819")}
             />
           </Field>
 
@@ -267,7 +268,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               value={form.assignedUserId}
               onChange={set('assignedUserId')}
             >
-              <option value="">{assignees.length ? 'Choose a person…' : 'Nobody available to assign'}</option>
+              <option value="">{assignees.length ? tr('Choose a person…') : tr('Nobody available to assign')}</option>
               {assignees.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name} — {u.title || u.role.toLowerCase()}
@@ -279,8 +280,8 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 <span className="grid h-7 w-7 place-items-center rounded-full text-[10px] font-semibold text-white" style={{ background: person.color }}>
                   {initials(person.name)}
                 </span>
-                {person.openTasks === 0 ? 'Has no open tasks right now' : `Has ${person.openTasks} open task${person.openTasks === 1 ? '' : 's'}`}
-                {person.overdue > 0 && <span className="text-status-danger">· {person.overdue} late</span>}
+                {person.openTasks === 0 ? tr('Has no open tasks right now') : tr('Has {n} open task(s)', { n: person.openTasks })}
+                {person.overdue > 0 && <span className="text-status-danger">· {tr('{n} late', { n: person.overdue })}</span>}
               </span>
             )}
           </Field>
@@ -297,7 +298,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                     onClick={() => setValue('dueAt', on ? '' : value)}
                     className={'focus-ring rounded-full border px-3 py-1 text-[13px] ' + (on ? 'border-accent bg-accent text-white' : 'border-border-strong text-ink-secondary hover:bg-subtle')}
                   >
-                    {d.label}
+                    {tr(d.label)}
                   </button>
                 )
               })}
@@ -306,8 +307,8 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
           </Field>
 
           <div>
-            <span className="mb-1.5 block text-[14px] font-semibold text-ink">How urgent is it?</span>
-            <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Priority">
+            <span className="mb-1.5 block text-[14px] font-semibold text-ink">{tr("How urgent is it?")}</span>
+            <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label={tr("Priority")}>
               {PRIORITIES.map((p) => {
                 const on = form.priority === p.value
                 return (
@@ -320,7 +321,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                     className={'focus-ring rounded-control border py-2 text-[13px] font-medium ' + (on ? 'text-white' : 'border-border-strong bg-surface text-ink-secondary hover:bg-subtle')}
                     style={on ? { background: p.tone, borderColor: p.tone } : undefined}
                   >
-                    {p.value}
+                    {tr(p.value)}
                   </button>
                 )
               })}
@@ -332,7 +333,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               className={inputCls + ' h-24 resize-none'}
               value={form.description}
               onChange={set('description')}
-              placeholder="e.g. Compare the printed sample with the approved mockup and note any differences."
+              placeholder={tr("e.g. Compare the printed sample with the approved mockup and note any differences.")}
             />
           </Field>
           <div className="-mt-2 space-y-2">
@@ -343,7 +344,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                   <audio controls src={n.audio} className="h-9 min-w-0 flex-1" />
                   <button
                     type="button"
-                    title="Delete voice note"
+                    title={tr("Delete voice note")}
                     onClick={() => setVoiceNotes((list) => list.filter((_, j) => j !== i))}
                     className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-control text-ink-tertiary hover:bg-surface hover:text-status-danger"
                   >
@@ -361,7 +362,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 )}
                 {activeNote && (
                   <button type="button" onClick={addAnotherNote} className="focus-ring flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
-                    <Plus size={14} /> Record another voice note
+                    <Plus size={14} /> {tr("Record another voice note")}
                   </button>
                 )}
               </>
@@ -377,9 +378,9 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               className="focus-ring flex w-full items-center justify-between rounded-card px-4 py-3 text-left"
             >
               <span>
-                <span className="block text-[14px] font-semibold text-ink">More details</span>
+                <span className="block text-[14px] font-semibold text-ink">{tr("More details")}</span>
                 <span className="block text-[12px] text-ink-tertiary">
-                  Optional — category, linked order, customer, target time, checklist{extrasSet ? ` · ${extrasSet} filled in` : ''}
+                  {tr('Optional — category, linked order, customer, target time, checklist')}{extrasSet ? ' · ' + tr('{n} filled in', { n: extrasSet }) : ''}
                 </span>
               </span>
               <ChevronDown size={18} className={'shrink-0 text-ink-secondary transition-transform ' + (moreOpen ? 'rotate-180' : '')} />
@@ -389,7 +390,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Category">
                     <select className={inputCls} value={form.category} onChange={set('category')}>
-                      {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                      {CATEGORIES.map((c) => <option key={c} value={c}>{tr(c)}</option>)}
                     </select>
                   </Field>
                   <Field label="Type of work">
@@ -407,34 +408,34 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                         setForm((f) => ({ ...f, entityType, category: entityType === 'Sales Order' ? 'Order Related' : f.category }))
                       }}
                     >
-                      {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t === 'General' ? 'Nothing specific' : t}</option>)}
+                      {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t === 'General' ? tr('Nothing specific') : tr(t)}</option>)}
                     </select>
                   </Field>
                   <Field label="Order / reference number">
-                    <input className={inputCls} value={form.entityId} onChange={set('entityId')} placeholder="e.g. SO-7819" />
+                    <input className={inputCls} value={form.entityId} onChange={set('entityId')} placeholder={tr("e.g. SO-7819")} />
                   </Field>
                   <Field label="Customer">
-                    <input className={inputCls} value={form.customerName} onChange={set('customerName')} maxLength={160} placeholder="e.g. Bright Wear Co." />
+                    <input className={inputCls} value={form.customerName} onChange={set('customerName')} maxLength={160} placeholder={tr("e.g. Bright Wear Co.")} />
                   </Field>
                   <Field label="Target time (minutes)" hint="How long it should normally take.">
-                    <input className={inputCls} type="number" min="1" value={form.estimatedMinutes} onChange={set('estimatedMinutes')} placeholder="e.g. 45" />
+                    <input className={inputCls} type="number" min="1" value={form.estimatedMinutes} onChange={set('estimatedMinutes')} placeholder={tr("e.g. 45")} />
                   </Field>
                 </div>
 
                 <div>
-                  <span className="mb-1.5 block text-[14px] font-semibold text-ink">Checklist</span>
+                  <span className="mb-1.5 block text-[14px] font-semibold text-ink">{tr("Checklist")}</span>
                   <div className="space-y-2">
                     {checklist.map((c, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <input
                           className={inputCls + ' flex-1'}
                           value={c.item}
-                          placeholder={`Step ${i + 1}`}
+                          placeholder={tr('Step {n}', { n: i + 1 })}
                           onChange={(e) => setChecklist((l) => l.map((x, j) => (j === i ? { ...x, item: e.target.value } : x)))}
                         />
                         <button
                           type="button"
-                          title="Remove step"
+                          title={tr("Remove step")}
                           onClick={() => setChecklist((l) => l.filter((_, j) => j !== i))}
                           className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-control text-ink-tertiary hover:bg-subtle hover:text-status-danger"
                         >
@@ -448,7 +449,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                     onClick={() => setChecklist((l) => [...l, { item: '', isRequired: true }])}
                     className="focus-ring mt-2 flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
                   >
-                    <Plus size={14} /> Add a step
+                    <Plus size={14} /> {tr("Add a step")}
                   </button>
                 </div>
 
@@ -460,7 +461,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
                       onChange={(e) => setSaveAsTemplate(e.target.checked)}
                       className="mt-0.5 h-4 w-4 rounded border-border-strong accent-accent"
                     />
-                    <span>Also save this as a template, so it can be reused from <span className="font-medium text-ink">Task Templates</span>.</span>
+                    <span>{tr("Also save this as a template, so it can be reused from")} <span className="font-medium text-ink">{tr("Task Templates")}</span>.</span>
                   </label>
                 )}
               </div>
@@ -471,18 +472,18 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
         {/* Footer: always visible; says what's missing instead of silently disabling */}
         <div className="border-t border-border bg-surface px-5 py-3">
           {missing.length > 0 && (
-            <p className="mb-2 text-[13px] text-status-danger">Please fill in: {missing.join(' and ')}.</p>
+            <p className="mb-2 text-[13px] text-status-danger">{tr('Please fill in: {fields}.', { fields: missing.map((m) => tr(m)).join(tr(' and ')) })}</p>
           )}
           <div className="flex justify-end gap-2">
             <button onClick={onClose} className="focus-ring rounded-control border border-border-strong bg-surface px-4 py-2.5 text-sm font-medium text-ink-secondary hover:bg-subtle">
-              Cancel
+              {tr("Cancel")}
             </button>
             <button
               onClick={submit}
               disabled={busy}
               className="focus-ring rounded-control bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
             >
-              {busy ? 'Creating…' : saveAsTemplate ? 'Create task + template' : 'Create task'}
+              {busy ? tr('Creating…') : saveAsTemplate ? tr('Create task + template') : tr('Create task')}
             </button>
           </div>
         </div>

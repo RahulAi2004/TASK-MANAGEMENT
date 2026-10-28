@@ -1,8 +1,18 @@
+import crypto from 'node:crypto'
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { db } from '../lib/db.js'
 import { authRequired, requireRole, assignableRoleFilter } from '../lib/auth.js'
+
+// 12 characters from an unambiguous alphabet (no 0/O/1/l/I), at least one digit.
+function randomPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const bytes = crypto.randomBytes(12)
+  const chars = [...bytes].map((b) => alphabet[b % alphabet.length])
+  if (!chars.some((c) => /\d/.test(c))) chars[11] = '7'
+  return chars.join('')
+}
 
 export const usersRouter = Router()
 usersRouter.use(authRequired)
@@ -27,7 +37,9 @@ usersRouter.post('/', requireRole('ADMIN'), async (req, res) => {
   const exists = await db.user.findUnique({ where: { email: email.toLowerCase() } })
   if (exists) return res.status(409).json({ error: 'A user with that email already exists' })
 
-  const tempPassword = password || 'Welcome@123'
+  // A unique random temporary password per invite (a shared default would let anyone who knows
+  // it sign in as any newly invited user). The admin sees it once and passes it on.
+  const tempPassword = password || randomPassword()
   const user = await db.user.create({
     data: {
       name,

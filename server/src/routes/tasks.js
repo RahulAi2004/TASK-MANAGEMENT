@@ -343,6 +343,37 @@ tasksRouter.post('/:id/transition', async (req, res) => {
   res.json({ task: updated })
 })
 
+// ── Edit due date / priority (used one-by-one and by bulk actions) ─────────
+const EditSchema = z
+  .object({
+    dueAt: z.string().datetime().nullable().optional(), // null clears the due date
+    priority: z.enum(['Urgent', 'High', 'Medium', 'Low']).optional(),
+  })
+  .refine((d) => d.dueAt !== undefined || d.priority !== undefined, 'Nothing to change')
+tasksRouter.patch('/:id', async (req, res) => {
+  const p = EditSchema.safeParse(req.body)
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid payload' })
+  const task = await db.task.findFirst({ where: { id: req.params.id, deletedAt: null } })
+  if (!task) return res.status(404).json({ error: 'Task not found' })
+  if (!(req.user.role === 'ADMIN' || task.createdById === req.user.id))
+    return res.status(403).json({ error: 'Only an admin or the person who created the task can change it' })
+  if (['Completed', 'Cancelled'].includes(task.status)) return res.status(422).json({ error: `A ${task.status.toLowerCase()} task cannot be changed` })
+
+  const data = {}
+  const notes = []
+  if (p.data.dueAt !== undefined) {
+    data.dueAt = p.data.dueAt ? new Date(p.data.dueAt) : null
+    notes.push(data.dueAt ? `Due date set to ${data.dueAt.toISOString()}` : 'Due date removed')
+  }
+  if (p.data.priority && p.data.priority !== task.priority) {
+    data.priority = p.data.priority
+    notes.push(`Priority ${task.priority} → ${p.data.priority}`)
+  }
+  const updated = await db.task.update({ where: { id: task.id }, data, include: listInclude })
+  if (notes.length) await db.activity.create({ data: { taskId: task.id, activityType: 'Edited', performedById: req.user.id, notes: notes.join(' · ') } })
+  res.json({ task: updated })
+})
+
 // ── Assign / Reassign ────────────────────────────────────────────────────────
 const AssignSchema = z.object({
   assignedUserId: z.string().min(1),

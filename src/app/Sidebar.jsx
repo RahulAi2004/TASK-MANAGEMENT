@@ -3,6 +3,7 @@ import {
   LayoutGrid, LayoutDashboard, PieChart, FileStack, BarChart3, Users2, CheckCircle2, Ticket, Inbox, ListChecks,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
+import { t as tr } from '../i18n'
 
 // Role-scoped navigation — items a role cannot use are NOT rendered.
 // "Task Management" is the main workspace (task list + detail panel) for every role.
@@ -52,7 +53,7 @@ export default function Sidebar() {
             {({ isActive }) => (
               <>
                 <Icon size={20} className={isActive ? 'text-accent' : 'text-ink-tertiary'} />
-                {label}
+                {tr(label)}
               </>
             )}
           </NavLink>

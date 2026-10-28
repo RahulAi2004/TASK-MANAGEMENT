@@ -10,7 +10,8 @@ import StatusBadge from './StatusBadge'
 import PriorityFlag from './PriorityFlag'
 import { CategoryChip } from './chips'
 import { initials } from '../../auth/AuthContext'
-import { taskMeta, taskCategory, elapsedMs, slaStatus, fmtDuration, fmtMinutes, fmtDate, fmtTime, CATEGORIES } from './taskMeta'
+import { taskMeta, taskCategory, elapsedMs, slaStatus, fmtDuration, fmtMinutes, fmtDate, fmtTime, CATEGORIES, statusLabel } from './taskMeta'
+import { t as tr } from '../../i18n'
 
 const STATUS_CHIPS = [
   { label: 'All', value: 'All' },
@@ -39,7 +40,7 @@ function SlaBadge({ status }) {
   const Icon = s.icon
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: s.bg, color: s.fg }}>
-      <Icon size={12} /> {s.label}
+      <Icon size={12} /> {tr(s.label)}
     </span>
   )
 }
@@ -58,7 +59,7 @@ function TimeLabel({ t, now }) {
   return (
     <span className={'inline-flex items-center gap-1 text-[12px] ' + (started ? 'font-semibold text-ink' : 'text-ink-tertiary')}>
       <Clock size={14} className={started ? 'text-[#1E7B34]' : ''} />
-      {started ? fmtDuration(elapsedMs(t, now)) : t.estimatedMinutes ? fmtMinutes(t.estimatedMinutes) + ' target' : 'Not started'}
+      {started ? fmtDuration(elapsedMs(t, now)) : t.estimatedMinutes ? tr('{time} target', { time: fmtMinutes(t.estimatedMinutes) }) : tr('Not started')}
     </span>
   )
 }
@@ -70,7 +71,7 @@ function Sheet({ title, onClose, children }) {
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border-strong" />
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-[17px] font-semibold text-ink">{title}</h3>
-          <button onClick={onClose} aria-label="Close" className="focus-ring grid h-8 w-8 place-items-center rounded-full text-ink-secondary hover:bg-subtle">
+          <button onClick={onClose} aria-label={tr("Close")} className="focus-ring grid h-8 w-8 place-items-center rounded-full text-ink-secondary hover:bg-subtle">
             <X size={20} />
           </button>
         </div>
@@ -99,9 +100,9 @@ export default function MobileTaskList({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[28px] font-bold leading-tight text-ink">{title}</h1>
-          <p className="text-[14px] text-ink-secondary">Tap a task to see what to do next</p>
+          <p className="text-[14px] text-ink-secondary">{tr("Tap a task to see what to do next")}</p>
         </div>
-        <div className="flex shrink-0 rounded-control border border-border bg-surface p-0.5" role="tablist" aria-label="View">
+        <div className="flex shrink-0 rounded-control border border-border bg-surface p-0.5" role="tablist" aria-label={tr("View")}>
           {[['list', 'List', List], ['cards', 'Cards', LayoutGrid]].map(([key, label, Icon]) => (
             <button
               key={key}
@@ -110,7 +111,7 @@ export default function MobileTaskList({
               onClick={() => setView(key)}
               className={'focus-ring flex items-center gap-1 rounded-[5px] px-2.5 py-1.5 text-[13px] ' + (view === key ? 'bg-accent font-semibold text-white' : 'text-ink-secondary')}
             >
-              <Icon size={15} /> {label}
+              <Icon size={15} /> {tr(label)}
             </button>
           ))}
         </div>
@@ -120,14 +121,14 @@ export default function MobileTaskList({
       <div className="-mx-4 mb-2.5 flex gap-2 overflow-x-auto px-4 pb-1">
         {STATUS_CHIPS.map((c) => (
           <button key={c.value} onClick={() => { set('status')(c.value); setLimit(10) }} className={chip(f.status === c.value)}>
-            {c.label}
+            {tr(c.label)}
           </button>
         ))}
       </div>
 
       {/* SLA chips with counts */}
       <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
-        <button onClick={() => set('sla')('All')} className={chip(f.sla === 'All')}>All</button>
+        <button onClick={() => set('sla')('All')} className={chip(f.sla === 'All')}>{tr("All")}</button>
         {['Critical', 'Delayed'].map((s) => {
           const on = f.sla === s
           const tone = s === 'Delayed' ? '#D13438' : '#C25E00'
@@ -138,7 +139,7 @@ export default function MobileTaskList({
               className="focus-ring flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-1.5 text-[13px] font-medium"
               style={on ? { background: tone, borderColor: tone, color: '#fff' } : { background: s === 'Delayed' ? '#FDE7E9' : '#FFF1E0', borderColor: 'transparent', color: tone }}
             >
-              {SLA_BADGE[s].label}
+              {tr(SLA_BADGE[s].label)}
               <span className="grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-bold" style={on ? { background: '#fff', color: tone } : { background: tone, color: '#fff' }}>
                 {slaCounts[s] || 0}
               </span>
@@ -154,13 +155,13 @@ export default function MobileTaskList({
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search tasks…"
+            placeholder={tr("Search tasks…")}
             className="focus-ring h-11 w-full rounded-control border border-border bg-subtle pl-10 pr-3 text-[15px] text-ink placeholder:text-ink-tertiary"
           />
         </label>
         <button
           onClick={() => setFiltersOpen(true)}
-          aria-label="More filters"
+          aria-label={tr("More filters")}
           className="focus-ring relative grid h-11 w-11 shrink-0 place-items-center rounded-control border border-accent bg-surface text-accent"
         >
           <SlidersHorizontal size={19} />
@@ -176,15 +177,15 @@ export default function MobileTaskList({
           onClick={() => setTypeOpen((o) => !o)}
           className="focus-ring inline-flex items-center gap-1.5 rounded-control bg-accent-soft px-3 py-2 text-[14px] text-accent"
         >
-          <Tag size={16} /> Category: <span className="font-semibold">{f.category}</span> <ChevronDown size={16} />
+          <Tag size={16} /> {tr('Category')}: <span className="font-semibold">{tr(f.category)}</span> <ChevronDown size={16} />
         </button>
         {typeOpen && (
           <>
             <div className="fixed inset-0 z-20" onClick={() => setTypeOpen(false)} />
             <div className="absolute left-0 top-full z-30 mt-1.5 w-56 rounded-card border border-border bg-surface p-2 shadow-pop">
               <div className="mb-1 flex items-center justify-between px-2 pt-1">
-                <span className="text-[15px] font-semibold text-ink">Category</span>
-                <button onClick={() => setTypeOpen(false)} aria-label="Close" className="text-ink-secondary"><X size={18} /></button>
+                <span className="text-[15px] font-semibold text-ink">{tr("Category")}</span>
+                <button onClick={() => setTypeOpen(false)} aria-label={tr("Close")} className="text-ink-secondary"><X size={18} /></button>
               </div>
               {['All', ...CATEGORIES].map((c) => (
                 <button
@@ -195,7 +196,7 @@ export default function MobileTaskList({
                   <span className={'grid h-5 w-5 place-items-center rounded-full border-2 ' + (f.category === c ? 'border-accent' : 'border-border-strong')}>
                     {f.category === c && <span className="h-2.5 w-2.5 rounded-full bg-accent" />}
                   </span>
-                  {c === 'All' ? <span className="text-ink">All</span> : <CategoryChip category={c} />}
+                  {c === 'All' ? <span className="text-ink">{tr('All')}</span> : <CategoryChip category={c} />}
                 </button>
               ))}
             </div>
@@ -207,12 +208,12 @@ export default function MobileTaskList({
       {error ? (
         <div className="py-10 text-center text-sm text-status-danger">{error}</div>
       ) : loading && tasks.length === 0 ? (
-        <div className="py-10 text-center text-sm text-ink-tertiary">Loading…</div>
+        <div className="py-10 text-center text-sm text-ink-tertiary">{tr("Loading…")}</div>
       ) : tasks.length === 0 ? (
         <div className="py-12 text-center text-sm text-ink-tertiary">
-          {filtersActive ? 'No tasks match these filters.' : isAdmin ? 'No tasks yet.' : 'No tasks assigned to you.'}
+          {filtersActive ? tr('No tasks match these filters.') : isAdmin ? tr('No tasks yet.') : tr('No tasks assigned to you.')}
           {filtersActive && (
-            <button onClick={clearFilters} className="mx-auto mt-3 flex items-center gap-1.5 font-medium text-accent"><RotateCw size={15} /> Clear filters</button>
+            <button onClick={clearFilters} className="mx-auto mt-3 flex items-center gap-1.5 font-medium text-accent"><RotateCw size={15} /> {tr("Clear filters")}</button>
           )}
         </div>
       ) : view === 'list' ? (
@@ -264,10 +265,10 @@ export default function MobileTaskList({
                   <SlaBadge status={sla} />
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
-                  <div><div className="text-ink-tertiary">Module</div><div className="text-ink">{t.department?.name || '—'}</div></div>
-                  <div><div className="text-ink-tertiary">Priority</div><PriorityFlag priority={t.priority} size="sm" /></div>
-                  <div><div className="text-ink-tertiary">Started</div><div className="text-ink">{t.startedAt ? `${fmtDate(t.startedAt)}, ${fmtTime(t.startedAt)}` : 'Not started'}</div></div>
-                  <div><div className="text-ink-tertiary">Elapsed / Normal</div><div className="text-ink">{fmtDuration(elapsedMs(t, now))} / {fmtMinutes(t.estimatedMinutes)}</div></div>
+                  <div><div className="text-ink-tertiary">{tr("Module")}</div><div className="text-ink">{t.department?.name || '—'}</div></div>
+                  <div><div className="text-ink-tertiary">{tr("Priority")}</div><PriorityFlag priority={t.priority} size="sm" /></div>
+                  <div><div className="text-ink-tertiary">{tr("Started")}</div><div className="text-ink">{t.startedAt ? `${fmtDate(t.startedAt)}, ${fmtTime(t.startedAt)}` : 'Not started'}</div></div>
+                  <div><div className="text-ink-tertiary">{tr("Elapsed / Normal")}</div><div className="text-ink">{fmtDuration(elapsedMs(t, now))} / {fmtMinutes(t.estimatedMinutes)}</div></div>
                 </div>
                 <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
                   <span className="flex items-center gap-2">
@@ -275,7 +276,7 @@ export default function MobileTaskList({
                     <StatusBadge status={t.status} size="sm" />
                   </span>
                   <span className="flex items-center gap-1.5 text-[12px] text-ink-secondary">
-                    <OwnerAvatar user={t.assignedUser} /> {t.assignedUser?.name?.split(' ')[0] || 'Unassigned'}
+                    <OwnerAvatar user={t.assignedUser} /> {t.assignedUser?.name?.split(' ')[0] || tr('Nobody yet')}
                   </span>
                 </div>
               </button>
@@ -289,43 +290,43 @@ export default function MobileTaskList({
           Load more ({tasks.length - shown.length} left)
         </button>
       )}
-      {tasks.length > 0 && <p className="mt-3 text-center text-xs text-ink-tertiary">Showing {shown.length} of {tasks.length} tasks</p>}
+      {tasks.length > 0 && <p className="mt-3 text-center text-xs text-ink-tertiary">{tr('Showing {n} of {total} tasks', { n: shown.length, total: tasks.length })}</p>}
 
       {filtersOpen && (
-        <Sheet title="Filters" onClose={() => setFiltersOpen(false)}>
+        <Sheet title={tr("Filters")} onClose={() => setFiltersOpen(false)}>
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-ink">Task Status</span>
+              <span className="mb-1 block text-sm font-medium text-ink">{tr("Task Status")}</span>
               <select value={f.status} onChange={(e) => set('status')(e.target.value)} className={selectCls}>
-                {statuses.map((s) => <option key={s}>{s}</option>)}
+                {statuses.map((s) => <option key={s} value={s}>{s === 'All' ? tr('All statuses') : s === 'Waiting / On Hold' ? tr('Paused or blocked') : statusLabel(s)}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-ink">Module</span>
+              <span className="mb-1 block text-sm font-medium text-ink">{tr("Module")}</span>
               <select value={f.module} onChange={(e) => set('module')(e.target.value)} className={selectCls}>
-                <option value="All">All modules</option>
+                <option value="All">{tr("All modules")}</option>
                 {modules.map((m) => <option key={m}>{m}</option>)}
               </select>
             </label>
             {isAdmin && (
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-ink">Owner</span>
+                <span className="mb-1 block text-sm font-medium text-ink">{tr("Owner")}</span>
                 <select value={f.owner} onChange={(e) => set('owner')(e.target.value)} className={selectCls}>
-                  <option value="All">All owners</option>
+                  <option value="All">{tr("All owners")}</option>
                   {owners.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                  <option value="none">Unassigned</option>
+                  <option value="none">{tr("Unassigned")}</option>
                 </select>
               </label>
             )}
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-ink">Date range</span>
+              <span className="mb-1 block text-sm font-medium text-ink">{tr("Date range")}</span>
               <select value={f.range} onChange={(e) => set('range')(e.target.value)} className={selectCls}>
-                {ranges.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                {ranges.map((r) => <option key={r.key} value={r.key}>{tr(r.label)}</option>)}
               </select>
             </label>
             <div className="flex gap-2 pt-2">
-              <button onClick={() => { clearFilters(); setFiltersOpen(false) }} className="focus-ring h-11 flex-1 rounded-control border border-accent text-[15px] font-medium text-accent">Clear all</button>
-              <button onClick={() => setFiltersOpen(false)} className="focus-ring h-11 flex-1 rounded-control bg-accent text-[15px] font-semibold text-white">Show {tasks.length} tasks</button>
+              <button onClick={() => { clearFilters(); setFiltersOpen(false) }} className="focus-ring h-11 flex-1 rounded-control border border-accent text-[15px] font-medium text-accent">{tr("Clear all")}</button>
+              <button onClick={() => setFiltersOpen(false)} className="focus-ring h-11 flex-1 rounded-control bg-accent text-[15px] font-semibold text-white">{tr('Show {n} tasks', { n: tasks.length })}</button>
             </div>
           </div>
         </Sheet>

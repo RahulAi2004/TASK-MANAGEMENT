@@ -1,4 +1,5 @@
 import { ClipboardList, PlayCircle, Clock, Upload, CheckCircle2, AlertCircle } from 'lucide-react'
+import { t as tr } from '../../i18n'
 
 // `filter` is the Task Management status filter a card applies when clicked.
 const CARDS = [
@@ -29,9 +30,9 @@ export default function StatCards({ stats, active, onSelect }) {
             <div className="grid h-11 w-11 place-items-center rounded-full" style={{ background: soft }}>
               <Icon size={22} style={{ color }} />
             </div>
-            <div className="mt-3 text-sm text-ink-secondary">{label}</div>
+            <div className="mt-3 text-sm text-ink-secondary">{tr(label)}</div>
             <div className="mt-0.5 text-[26px] font-semibold leading-tight text-ink">{stats?.[key] ?? '—'}</div>
-            <div className="text-xs text-ink-tertiary">Tasks</div>
+            <div className="text-xs text-ink-tertiary">{tr('Tasks')}</div>
           </Tag>
         )
       })}

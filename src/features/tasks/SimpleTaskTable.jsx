@@ -6,6 +6,7 @@ import StatusBadge from './StatusBadge'
 import { SlaChip } from './chips'
 import { initials } from '../../auth/AuthContext'
 import { taskMeta, slaStatus, dueLabel, DUE_TONE, statusSentence, allowedEvents } from './taskMeta'
+import { t as tr } from '../../i18n'
 
 // Steps that need nothing more than a click run straight from the list.
 const INLINE = new Set(['start', 'resume', 'accept'])
@@ -24,7 +25,7 @@ function NextStep({ t, user, onOpen, onAction, busy }) {
       </button>
     )
   }
-  const label = next?.event === 'approve' ? 'Review' : next?.event === 'submit' ? 'Finish' : 'Open'
+  const label = tr(next?.event === 'approve' ? 'Review' : next?.event === 'submit' ? 'Finish' : 'Open')
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onOpen(t.id) }}
@@ -35,19 +36,33 @@ function NextStep({ t, user, onOpen, onAction, busy }) {
   )
 }
 
-export default function SimpleTaskTable({ tasks, now, user, selectedId, onOpen, onAction, busyId }) {
+// `picked` / `onPick` enable the bulk-action checkboxes (shown only to people who can edit tasks).
+export default function SimpleTaskTable({ tasks, now, user, selectedId, onOpen, onAction, busyId, picked, onPick }) {
+  const selectable = Boolean(onPick)
+  const allPicked = selectable && tasks.length > 0 && tasks.every((t) => picked.has(t.id))
   const th = 'px-3 py-2.5 text-left text-[12px] font-semibold text-ink-secondary'
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] border-collapse">
         <thead>
           <tr className="border-b border-border bg-subtle/60">
-            <th className={th + ' pl-5'}>Task</th>
-            <th className={th}>Assigned to</th>
-            <th className={th}>Due</th>
-            <th className={th}>Status</th>
-            <th className={th}>On time?</th>
-            <th className={th + ' pr-5 text-right'}>Next step</th>
+            {selectable && (
+              <th className="w-10 py-2.5 pl-5">
+                <input
+                  type="checkbox"
+                  aria-label={tr("Select all tasks on this page")}
+                  checked={allPicked}
+                  onChange={() => onPick(tasks.map((t) => t.id), !allPicked)}
+                  className="h-4 w-4 cursor-pointer accent-accent"
+                />
+              </th>
+            )}
+            <th className={th + (selectable ? ' pl-2' : ' pl-5')}>{tr("Task")}</th>
+            <th className={th}>{tr("Assigned to")}</th>
+            <th className={th}>{tr("Due")}</th>
+            <th className={th}>{tr("Status")}</th>
+            <th className={th}>{tr("On time?")}</th>
+            <th className={th + ' pr-5 text-right'}>{tr("Next step")}</th>
           </tr>
         </thead>
         <tbody>
@@ -60,14 +75,25 @@ export default function SimpleTaskTable({ tasks, now, user, selectedId, onOpen, 
               <tr
                 key={t.id}
                 onClick={() => onOpen(t.id)}
-                className={'cursor-pointer border-b border-border last:border-0 ' + (t.id === selectedId ? 'bg-accent-soft/60' : 'hover:bg-subtle/70')}
+                className={'cursor-pointer border-b border-border last:border-0 ' + (t.id === selectedId || picked?.has(t.id) ? 'bg-accent-soft/60' : 'hover:bg-subtle/70')}
               >
-                <td className="max-w-[340px] py-3 pl-5 pr-3">
+                {selectable && (
+                  <td className="w-10 py-3 pl-5" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={tr('Select {title}', { title: t.title })}
+                      checked={picked.has(t.id)}
+                      onChange={() => onPick([t.id], !picked.has(t.id))}
+                      className="h-4 w-4 cursor-pointer accent-accent"
+                    />
+                  </td>
+                )}
+                <td className={'max-w-[340px] py-3 pr-3 ' + (selectable ? 'pl-2' : 'pl-5')}>
                   <div className="flex items-center gap-1.5">
                     {urgent && (
                       <Flag
                         size={14}
-                        aria-label={t.priority + ' priority'}
+                        aria-label={tr(t.priority) + ' — ' + tr('Priority')}
                         className="shrink-0"
                         style={{ color: t.priority === 'Urgent' ? '#B4232A' : '#E5383B' }}
                         fill={t.priority === 'Urgent' ? '#B4232A' : '#E5383B'}
@@ -86,7 +112,7 @@ export default function SimpleTaskTable({ tasks, now, user, selectedId, onOpen, 
                       <span className="max-w-[140px] truncate">{t.assignedUser.name}</span>
                     </span>
                   ) : (
-                    <span className="text-[13px] text-ink-tertiary">Nobody yet</span>
+                    <span className="text-[13px] text-ink-tertiary">{tr("Nobody yet")}</span>
                   )}
                 </td>
                 <td className={'whitespace-nowrap px-3 py-3 text-[13px] ' + DUE_TONE[due.tone]}>{due.text}</td>

@@ -1,6 +1,7 @@
 // Derived task facts shared by the Task Management table and the Task Detail panel:
 // metadata (customer, category, status notes), elapsed/normal time, SLA status, and the
 // client mirror of the server state machine (server/src/lib/stateMachine.js stays authoritative).
+import { t as tr } from '../../i18n'
 
 export function taskMeta(t) {
   try {
@@ -87,61 +88,75 @@ export const STATUS_LABEL = {
   Cancelled: 'Cancelled',
   Overdue: 'Late',
 }
-export const statusLabel = (s) => STATUS_LABEL[s] || s
+export const statusLabel = (s) => tr(STATUS_LABEL[s] || s)
 
 const firstName = (u) => (u?.name || '').split(' ')[0] || 'someone'
 
 /** One sentence saying where the task stands and who has to act next. */
 export function statusSentence(t, user) {
+  const name = firstName
   const me = t.assignedUser?.id === user?.id
   const reviewerIsMe = t.createdBy?.id === user?.id || user?.role === 'ADMIN'
   switch (t.status) {
     case 'Pending':
-      return t.assignedUser ? `Waiting for ${me ? 'you' : firstName(t.assignedUser)} to start` : 'Nobody is assigned yet'
+      if (!t.assignedUser) return tr('Nobody is assigned yet')
+      return me ? tr('Waiting for you to start') : tr('Waiting for {name} to start', { name: name(t.assignedUser) })
     case 'Assigned':
     case 'Accepted':
     case 'Reopened':
-      return me ? 'Ready for you to start' : `Waiting for ${firstName(t.assignedUser)} to start`
+      return me ? tr('Ready for you to start') : tr('Waiting for {name} to start', { name: name(t.assignedUser) })
     case 'In Progress':
-      return me ? 'You are working on this' : `${firstName(t.assignedUser)} is working on this`
+      return me ? tr('You are working on this') : tr('{name} is working on this', { name: name(t.assignedUser) })
     case 'On Hold':
-      return 'Paused — resume when ready'
+      return tr('Paused — resume when ready')
     case 'Waiting':
-      return 'Blocked — waiting for another task to finish'
+      return tr('Blocked — waiting for another task to finish')
     case 'Submitted':
-      return reviewerIsMe ? 'Finished — ready for your review' : `Finished — waiting for ${firstName(t.createdBy)} to review`
+      return reviewerIsMe ? tr('Finished — ready for your review') : tr('Finished — waiting for {name} to review', { name: name(t.createdBy) })
     case 'Rejected':
-      return 'Sent back — needs changes'
+      return tr('Sent back — needs changes')
     case 'Completed':
-      return 'Done'
+      return tr('Done')
     case 'Cancelled':
-      return 'Cancelled'
+      return tr('Cancelled')
     default:
       return statusLabel(t.status)
   }
 }
 
+/**
+ * Is this task waiting on *me*? Mine to start / continue / fix, or mine to review.
+ * Personal on purpose: an admin *may* act on any task, but only their own work counts here.
+ */
+export function needsMyAction(t, user) {
+  if (!t || !user) return false
+  const mine = t.assignedUser?.id === user.id
+  if (mine && ['Pending', 'Assigned', 'Accepted', 'Reopened', 'In Progress', 'On Hold', 'Rejected'].includes(t.status)) return true
+  const reviewer = (t.reviewerId || t.createdBy?.id) === user.id
+  return t.status === 'Submitted' && reviewer
+}
+
 /** Due date in words: "Due in 3h", "Due tomorrow, 5:00 PM", "2 days late", "Done". */
 export function dueLabel(t, now = Date.now()) {
-  if (t.status === 'Completed') return { text: 'Done', tone: 'done' }
+  if (t.status === 'Completed') return { text: tr('Done'), tone: 'done' }
   if (t.status === 'Cancelled') return { text: '—', tone: 'muted' }
-  if (!t.dueAt) return { text: 'No due date', tone: 'muted' }
+  if (!t.dueAt) return { text: tr('No due date'), tone: 'muted' }
   const due = new Date(t.dueAt)
   const diff = due - now
   const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime() }
   const days = Math.round((dayStart(due) - dayStart(now)) / 86_400_000)
   if (diff < 0) {
     const late = -diff
-    if (late < HOUR) return { text: `${Math.max(1, Math.round(late / 60_000))}m late`, tone: 'late' }
-    if (late < 24 * HOUR) return { text: `${Math.round(late / HOUR)}h late`, tone: 'late' }
+    if (late < HOUR) return { text: tr('{n}m late', { n: Math.max(1, Math.round(late / 60_000)) }), tone: 'late' }
+    if (late < 24 * HOUR) return { text: tr('{n}h late', { n: Math.round(late / HOUR) }), tone: 'late' }
     const d = Math.round(late / (24 * HOUR))
-    return { text: `${d} day${d === 1 ? '' : 's'} late`, tone: 'late' }
+    return { text: d === 1 ? tr('1 day late') : tr('{n} days late', { n: d }), tone: 'late' }
   }
-  if (diff < HOUR) return { text: `Due in ${Math.max(1, Math.round(diff / 60_000))}m`, tone: 'soon' }
-  if (days === 0) return { text: `Due today, ${fmtTime(t.dueAt)}`, tone: diff < 2 * HOUR ? 'soon' : 'ok' }
-  if (days === 1) return { text: `Due tomorrow, ${fmtTime(t.dueAt)}`, tone: 'ok' }
-  if (days < 7) return { text: `Due ${due.toLocaleDateString('en-US', { weekday: 'long' })}`, tone: 'ok' }
-  return { text: `Due ${due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`, tone: 'ok' }
+  if (diff < HOUR) return { text: tr('Due in {n}m', { n: Math.max(1, Math.round(diff / 60_000)) }), tone: 'soon' }
+  if (days === 0) return { text: tr('Due today, {time}', { time: fmtTime(t.dueAt) }), tone: diff < 2 * HOUR ? 'soon' : 'ok' }
+  if (days === 1) return { text: tr('Due tomorrow, {time}', { time: fmtTime(t.dueAt) }), tone: 'ok' }
+  if (days < 7) return { text: tr('Due {day}', { day: tr(due.toLocaleDateString('en-US', { weekday: 'long' })) }), tone: 'ok' }
+  return { text: tr('Due {date}', { date: due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }), tone: 'ok' }
 }
 export const DUE_TONE = { late: 'text-status-danger font-semibold', soon: 'text-[#C25E00] font-medium', ok: 'text-ink', done: 'text-[#1E7B34] font-medium', muted: 'text-ink-tertiary' }
 
@@ -207,7 +222,7 @@ export function allowedEvents(t, user) {
     if (x.onlyIf && !x.onlyIf(t)) return false
     if (x.who === 'assignee') return isAssignee || isAdmin
     return isCreator || isAdmin
-  })
+  }).map((x) => ({ ...x, label: tr(x.label) }))
 }
 
 export const DELAY_REASONS = [

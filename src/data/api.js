@@ -37,6 +37,7 @@ export const api = {
   createTask: (payload) => req('/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   transition: (id, body) =>
     req(`/tasks/${id}/transition`, { method: 'POST', body: JSON.stringify(body) }),
+  updateTask: (id, body) => req(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   assignTask: (id, body) =>
     req(`/tasks/${id}/assign`, { method: 'POST', body: JSON.stringify(body) }),
   uploadFile: (id, body) => req(`/tasks/${id}/files`, { method: 'POST', body: JSON.stringify(body) }),
@@ -64,6 +65,7 @@ export const api = {
     }),
   notifications: () => req('/notifications'),
   markNotificationsRead: () => req('/notifications/read-all', { method: 'POST' }),
+  markNotificationRead: (id) => req(`/notifications/${id}/read`, { method: 'POST' }),
   remind: (taskId) => req(`/tasks/${taskId}/remind`, { method: 'POST' }),
   assignableUsers: () => req('/users?assignable=1'),
   workload: () => req('/users/workload'),

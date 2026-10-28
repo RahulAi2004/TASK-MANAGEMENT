@@ -8,9 +8,12 @@ export const authRouter = Router()
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
 
-// Roles allowed to sign in for now. Kept admin-only until the other portals
-// are ready — add 'SALES', 'DESIGNER', 'IT' here to re-enable them.
-const ALLOWED_LOGIN_ROLES = ['ADMIN']
+// Roles allowed to sign in with a password (everyone else signs in through Suite SSO).
+// Set PASSWORD_LOGIN_ROLES in .env, e.g. "ADMIN,SALES,DESIGNER,IT". Default: admin only.
+const ALLOWED_LOGIN_ROLES = (process.env.PASSWORD_LOGIN_ROLES || 'ADMIN')
+  .split(',')
+  .map((r) => r.trim().toUpperCase())
+  .filter(Boolean)
 
 authRouter.post('/login', async (req, res) => {
   const parsed = LoginSchema.safeParse(req.body)

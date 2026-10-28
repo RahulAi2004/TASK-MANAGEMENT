@@ -9,6 +9,7 @@ import TopBar from './TopBar'
 import CreateTaskPanel from '../features/tasks/CreateTaskPanel'
 import TaskSettingsModal from '../features/settings/TaskSettingsModal'
 import { useAuth } from '../auth/AuthContext'
+import { t as tr } from '../i18n'
 
 function BottomNav({ onSettings }) {
   const { user } = useAuth()
@@ -18,14 +19,14 @@ function BottomNav({ onSettings }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Main">
       <NavLink to={isAdmin ? '/overview' : '/'} end className={({ isActive }) => item(isActive)}>
-        <Home size={22} /> Home
+        <Home size={22} /> {tr('Home')}
       </NavLink>
       <NavLink to={isAdmin ? '/' : '/all-tasks'} end={isAdmin} className={({ isActive }) => item(isActive)}>
-        <ListChecks size={22} /> Task Management
+        <ListChecks size={22} /> {tr('Task Management')}
       </NavLink>
       {isAdmin && (
         <button onClick={onSettings} className={item(false)}>
-          <Settings size={22} /> Settings
+          <Settings size={22} /> {tr('Settings')}
         </button>
       )}
     </nav>
@@ -59,7 +60,7 @@ export default function AppShell({ title, subtitle, children, onTasksChanged, ac
                     onClick={() => setCreateOpen(true)}
                     className="focus-ring hidden items-center gap-2 rounded-control bg-accent px-5 py-2.5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-accent-hover md:flex"
                   >
-                    <Plus size={18} /> {user.role === 'SALES' ? 'New Design Task' : 'New Task'}
+                    <Plus size={18} /> {user.role === 'SALES' ? tr('New Design Task') : tr('New Task')}
                   </button>
                 )}
               </div>
@@ -73,7 +74,7 @@ export default function AppShell({ title, subtitle, children, onTasksChanged, ac
       {canCreate && (
         <button
           onClick={() => setCreateOpen(true)}
-          aria-label="New task"
+          aria-label={tr('New task')}
           className="focus-ring fixed bottom-20 right-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-accent text-white shadow-pop md:hidden"
         >
           <Plus size={28} />

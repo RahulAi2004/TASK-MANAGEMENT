@@ -12,6 +12,7 @@ import StatusBadge from './StatusBadge'
 import PriorityFlag from './PriorityFlag'
 import VoiceRecorder from '../../components/VoiceRecorder'
 import { CategoryChip } from './chips'
+import TaskTabs from './TaskTabs'
 import useNow from './useNow'
 import {
   taskMeta, taskCategory, elapsedMs, slaStatus, SLA_STYLE, fmtDuration, fmtMinutes, fmtDate,
@@ -19,6 +20,7 @@ import {
 } from './taskMeta'
 import { api } from '../../data/api'
 import { useApi, useAuth, initials } from '../../auth/AuthContext'
+import { t as tr } from '../../i18n'
 
 const SLA_ICON = { Delayed: AlertCircle, Critical: Clock, Normal: CheckCircle2 }
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024
@@ -41,7 +43,7 @@ function Avatar({ u, size = 26 }) {
 function Row({ label, children }) {
   return (
     <div className="grid min-h-[34px] grid-cols-[78px_1fr] items-center gap-2 py-1">
-      <span className="text-[13px] text-ink-secondary">{label}</span>
+      <span className="text-[13px] text-ink-secondary">{tr(label)}</span>
       <span className="min-w-0 text-[13px] text-ink">{children}</span>
     </div>
   )
@@ -148,7 +150,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
       return
     }
     a.src = n.audioData
-    a.play().then(() => setPlayingId(n.id)).catch(() => setErr('This recording could not be played'))
+    a.play().then(() => setPlayingId(n.id)).catch(() => setErr(tr('This recording could not be played')))
   }
   const saveDraft = async () => {
     if (!draft) return
@@ -182,7 +184,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
   // ── Render ────────────────────────────────────────────────────────────────
   let body
   if (loading && !t) {
-    body = <div className="py-16 text-center text-sm text-ink-tertiary">Loading…</div>
+    body = <div className="py-16 text-center text-sm text-ink-tertiary">{tr("Loading…")}</div>
   } else if (error || !t) {
     body = <div className="py-16 text-center text-sm text-status-danger">{error || 'Task not found'}</div>
   } else {
@@ -196,7 +198,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
     const isOpen = !['Completed', 'Cancelled'].includes(t.status)
     const recordings = [
       ...(t.voiceNote
-        ? [{ id: 'legacy', fileName: 'Voice instruction', audioData: t.voiceNote, transcript: t.voiceTranscript, createdAt: t.createdAt, legacy: true }]
+        ? [{ id: 'legacy', fileName: tr('Voice instruction'), audioData: t.voiceNote, transcript: t.voiceTranscript, createdAt: t.createdAt, legacy: true }]
         : []),
       ...(t.voiceNotes || []),
     ]
@@ -253,7 +255,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                   disabled={busy}
                   className="focus-ring ml-auto rounded-control px-2 py-1 text-[12px] text-ink-tertiary underline-offset-2 hover:text-status-danger hover:underline disabled:opacity-60"
                 >
-                  Cancel task
+                  {tr("Cancel task")}
                 </button>
               )}
             </div>
@@ -262,19 +264,19 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
           {pending && (
             <div className="mt-3 rounded-card border border-accent-softborder bg-accent-soft/50 p-3">
               <div className="mb-1.5 text-[13px] font-semibold text-ink">
-                {pending.event === 'submit' ? 'Send for review' : 'Send back for changes'}
+                {pending.event === 'submit' ? tr('Send for review') : tr('Send back for changes')}
               </div>
               <textarea
                 autoFocus
                 value={pendingText}
                 onChange={(e) => setPendingText(e.target.value)}
                 maxLength={2000}
-                placeholder={pending.event === 'submit' ? 'What did you do? (optional)' : 'What needs to change? (optional)'}
+                placeholder={pending.event === 'submit' ? tr('What did you do? (optional)') : tr('What needs to change? (optional)')}
                 className={inputCls + ' h-20 resize-none'}
               />
               <div className="mt-2 flex justify-end gap-2">
                 <button onClick={() => setPending(null)} className="focus-ring rounded-control px-3 py-1.5 text-sm text-ink-secondary hover:bg-subtle">
-                  Cancel
+                  {tr("Cancel")}
                 </button>
                 <button
                   onClick={confirmPending}
@@ -284,7 +286,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                     (pending.event === 'reject' ? 'bg-status-danger' : 'bg-accent hover:bg-accent-hover')
                   }
                 >
-                  {pending.event === 'submit' ? 'Send' : 'Send back'}
+                  {pending.event === 'submit' ? tr('Send') : tr('Send back')}
                 </button>
               </div>
             </div>
@@ -300,10 +302,10 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
           >
             <AlertCircle size={22} className="mt-0.5 shrink-0" />
             <div className="text-[13px] leading-snug">
-              <div className="text-[15px] font-semibold">{slaStyle.label}</div>
+              <div className="text-[15px] font-semibold">{tr(slaStyle.label)}</div>
               {meta.delay
-                ? <>Reason recorded: {meta.delay.reason}</>
-                : sla === 'Delayed' ? 'Task is delayed. Please provide a reason.' : 'This task is close to its time limit.'}
+                ? <>{tr('Reason recorded:')} {tr(meta.delay.reason)}</>
+                : sla === 'Delayed' ? tr('Task is delayed. Please provide a reason.') : tr('This task is close to its time limit.')}
             </div>
           </div>
         )}
@@ -317,41 +319,41 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                 style={{ background: slaStyle.bg, color: slaStyle.fg }}
                 title={slaStyle.hint}
               >
-                <SlaIcon size={17} /> {slaStyle.label}
+                <SlaIcon size={17} /> {tr(slaStyle.label)}
               </span>
             ) : (
               <span className="text-[15px] font-semibold text-ink-tertiary">—</span>
             )}
-            <div className="mt-1 text-xs text-ink-secondary">On time?</div>
+            <div className="mt-1 text-xs text-ink-secondary">{tr("On time?")}</div>
           </div>
           <div className="px-2">
             <div className="text-[19px] font-semibold text-ink">{t.startedAt ? fmtDuration(elapsedMs(t, now)) : '—'}</div>
-            <div className="mt-0.5 text-xs text-ink-secondary">{t.startedAt ? 'Time spent' : 'Not started yet'}</div>
+            <div className="mt-0.5 text-xs text-ink-secondary">{t.startedAt ? tr('Time spent') : tr('Not started yet')}</div>
           </div>
           <div className="px-2">
             <div className="text-[19px] font-semibold text-ink">{fmtMinutes(t.estimatedMinutes)}</div>
-            <div className="mt-0.5 text-xs text-ink-secondary">Target time</div>
+            <div className="mt-0.5 text-xs text-ink-secondary">{tr("Target time")}</div>
           </div>
         </div>
 
         {/* Description · current status · delay */}
         <section className={card + ' space-y-4'}>
           <div>
-            <h3 className="mb-1.5 text-[15px] font-semibold text-ink">What to do</h3>
+            <h3 className="mb-1.5 text-[15px] font-semibold text-ink">{tr("What to do")}</h3>
             <p className="whitespace-pre-wrap rounded-control bg-subtle px-3 py-2.5 text-[13px] leading-relaxed text-ink-secondary">
-              {t.description || 'No instructions were added.'}
+              {t.description || tr('No instructions were added.')}
             </p>
           </div>
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <h3 className="text-[15px] font-semibold text-ink">Latest update</h3>
+              <h3 className="text-[15px] font-semibold text-ink">{tr("Latest update")}</h3>
               {!editingStatus && isOpen && (
                 <button
                   onClick={() => { setStatusText(meta.currentStatus || ''); setEditingStatus(true) }}
                   className="focus-ring flex items-center gap-1 rounded-control px-1.5 py-0.5 text-xs font-medium text-accent hover:bg-accent-soft"
                 >
-                  <Pencil size={12} /> {meta.currentStatus ? 'Update' : 'Add'}
+                  <Pencil size={12} /> {meta.currentStatus ? tr('Update') : tr('Add')}
                 </button>
               )}
             </div>
@@ -362,17 +364,17 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                   value={statusText}
                   onChange={(e) => setStatusText(e.target.value)}
                   maxLength={500}
-                  placeholder="Where does this task stand right now? Anything blocking it?"
+                  placeholder={tr("Where does this task stand right now? Anything blocking it?")}
                   className={inputCls + ' h-20 resize-none'}
                 />
                 <div className="mt-1.5 flex justify-end gap-2">
-                  <button onClick={() => setEditingStatus(false)} className="focus-ring rounded-control px-3 py-1.5 text-sm text-ink-secondary hover:bg-subtle">Cancel</button>
-                  <button onClick={saveStatus} disabled={busy} className="focus-ring rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60">Save</button>
+                  <button onClick={() => setEditingStatus(false)} className="focus-ring rounded-control px-3 py-1.5 text-sm text-ink-secondary hover:bg-subtle">{tr("Cancel")}</button>
+                  <button onClick={saveStatus} disabled={busy} className="focus-ring rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60">{tr("Save")}</button>
                 </div>
               </div>
             ) : (
               <p className="rounded-control bg-subtle px-3 py-2.5 text-[13px] text-ink-secondary">
-                {meta.currentStatus || <span className="text-ink-tertiary">No update yet.</span>}
+                {meta.currentStatus || <span className="text-ink-tertiary">{tr("No update yet.")}</span>}
               </p>
             )}
           </div>
@@ -381,35 +383,35 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
             <div>
               {meta.delay && (
                 <div className="mb-2.5 rounded-control border border-status-danger/20 bg-status-dangersoft/60 px-3 py-2 text-[13px]">
-                  <span className="font-semibold text-status-danger">{meta.delay.reason}</span>
+                  <span className="font-semibold text-status-danger">{tr(meta.delay.reason)}</span>
                   <span className="text-ink-secondary"> — {meta.delay.remarks}</span>
                   <div className="mt-0.5 text-[11px] text-ink-tertiary">
-                    Reported by {meta.delay.byName || 'team'} · {fmtDate(meta.delay.at)} {fmtTime(meta.delay.at)}
+                    {tr('Reported by {name}', { name: meta.delay.byName || tr('team') })} · {fmtDate(meta.delay.at)} {fmtTime(meta.delay.at)}
                   </div>
                 </div>
               )}
               {isOpen && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <h3 className="text-[15px] font-semibold text-ink sm:col-span-2">Why is this late?</h3>
+                  <h3 className="text-[15px] font-semibold text-ink sm:col-span-2">{tr("Why is this late?")}</h3>
                   <label className="block">
                     <span className="mb-1.5 block text-[13px] font-semibold text-ink">
-                      Reason
+                      {tr("Reason")}
                     </span>
                     <select value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls}>
-                      <option value="">Select a reason</option>
-                      {DELAY_REASONS.map((r) => <option key={r}>{r}</option>)}
+                      <option value="">{tr("Select a reason")}</option>
+                      {DELAY_REASONS.map((r) => <option key={r} value={r}>{tr(r)}</option>)}
                     </select>
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-[13px] font-semibold text-ink">
-                      More details
+                      {tr("More details")}
                     </span>
                     <div className="relative">
                       <textarea
                         value={remarks}
                         onChange={(e) => setRemarks(e.target.value)}
                         maxLength={500}
-                        placeholder="A sentence or two for your manager…"
+                        placeholder={tr("A sentence or two for your manager…")}
                         className={inputCls + ' h-[74px] resize-none pb-5'}
                       />
                       <span className="pointer-events-none absolute bottom-1.5 right-2.5 text-[11px] text-ink-tertiary">{remarks.length}/500</span>
@@ -421,7 +423,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                       disabled={busy || !reason || !remarks.trim()}
                       className="focus-ring rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
                     >
-                      {meta.delay ? 'Update reason' : 'Save reason'}
+                      {meta.delay ? tr('Update reason') : tr('Save reason')}
                     </button>
                   </div>
                 </div>
@@ -432,7 +434,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
 
         {/* Task information */}
         <section className={card}>
-          <h3 className="mb-1.5 text-[15px] font-semibold text-ink">Details</h3>
+          <h3 className="mb-1.5 text-[15px] font-semibold text-ink">{tr("Details")}</h3>
           <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 sm:divide-x sm:divide-border">
             <div>
               <Row label="Category"><CategoryChip category={taskCategory(t)} /></Row>
@@ -460,19 +462,21 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
           <div className="mt-2 grid grid-cols-2 gap-3 border-t border-border pt-3">
             {[['Assigned to', t.assignedUser], ['Created by', t.createdBy]].map(([label, u]) => (
               <div key={label} className="min-w-0">
-                <div className="mb-1 text-[13px] text-ink-secondary">{label}</div>
+                <div className="mb-1 text-[13px] text-ink-secondary">{tr(label)}</div>
                 {u ? (
                   <div className="flex items-center gap-2">
                     <Avatar u={u} />
                     <span className="min-w-0 break-words text-[13px] leading-tight text-ink">{u.name}</span>
                   </div>
                 ) : (
-                  <span className="text-[13px] text-ink-tertiary">Nobody yet</span>
+                  <span className="text-[13px] text-ink-tertiary">{tr("Nobody yet")}</span>
                 )}
               </div>
             ))}
           </div>
         </section>
+
+        <TaskTabs t={t} user={user} onChanged={refresh} onError={setErr} />
 
         {/* Recordings */}
         <section className={card}>
@@ -488,14 +492,14 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                 disabled={recording}
                 className="focus-ring flex items-center gap-1.5 rounded-control bg-accent px-3 py-2 text-[13px] font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
               >
-                <Mic size={15} /> Record voice
+                <Mic size={15} /> {tr("Record voice")}
               </button>
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={busy}
                 className="focus-ring flex items-center gap-1.5 rounded-control border border-accent px-3 py-2 text-[13px] font-semibold text-accent hover:bg-accent-soft disabled:opacity-60"
               >
-                <Paperclip size={15} /> Add recording
+                <Paperclip size={15} /> {tr("Add recording")}
               </button>
               <input
                 ref={fileRef}
@@ -519,24 +523,24 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
               {draft?.transcript && <p className="mt-2 text-xs italic text-ink-secondary">"{draft.transcript}"</p>}
               <div className="mt-2 flex justify-end gap-2">
                 <button onClick={() => { setRecording(false); setDraft(null) }} className="focus-ring rounded-control px-3 py-1.5 text-sm text-ink-secondary hover:bg-subtle">
-                  Cancel
+                  {tr("Cancel")}
                 </button>
                 <button onClick={saveDraft} disabled={!draft || busy} className="focus-ring rounded-control bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50">
-                  Save recording
+                  {tr("Save recording")}
                 </button>
               </div>
             </div>
           )}
 
           {recordings.length === 0 && !recording && (
-            <p className="py-3 text-center text-[13px] text-ink-tertiary">No recordings yet.</p>
+            <p className="py-3 text-center text-[13px] text-ink-tertiary">{tr("No recordings yet.")}</p>
           )}
           <ul className="divide-y divide-border">
             {recordings.map((n) => (
               <li key={n.id} className="flex items-center gap-3 py-2.5">
                 <button
                   onClick={() => togglePlay(n)}
-                  title={playingId === n.id ? 'Pause' : 'Play'}
+                  title={playingId === n.id ? tr('Pause') : tr('Play')}
                   className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent hover:bg-accent-softborder"
                 >
                   {playingId === n.id ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
@@ -551,7 +555,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                   <button
                     onClick={() => setRowMenu((m) => (m === n.id ? null : n.id))}
                     className="focus-ring grid h-7 w-7 place-items-center rounded-control text-ink-secondary hover:bg-subtle"
-                    title="More"
+                    title={tr("More")}
                   >
                     <MoreHorizontal size={16} />
                   </button>
@@ -565,11 +569,11 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                           onClick={() => setRowMenu(null)}
                           className="flex items-center gap-2 px-3 py-2 text-sm text-ink hover:bg-subtle"
                         >
-                          <Download size={14} /> Download
+                          <Download size={14} /> {tr("Download")}
                         </a>
                         {canDeleteRec(n) && (
                           <button onClick={() => deleteRecording(n)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-status-danger hover:bg-subtle">
-                            <Trash2 size={14} /> Delete
+                            <Trash2 size={14} /> {tr("Delete")}
                           </button>
                         )}
                       </div>
@@ -586,10 +590,10 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                 onClick={() => { setDraft(null); setRecording(true) }}
                 className="focus-ring flex h-12 w-full items-center justify-center gap-2 rounded-full bg-accent text-[15px] font-semibold text-white"
               >
-                <Mic size={19} /> Record Voice Note
+                <Mic size={19} /> {tr("Record Voice Note")}
               </button>
               <button onClick={() => fileRef.current?.click()} disabled={busy} className="focus-ring flex w-full items-center justify-center gap-1.5 py-1.5 text-[13px] font-medium text-accent disabled:opacity-60">
-                <Paperclip size={15} /> Upload an audio file
+                <Paperclip size={15} /> {tr("Upload an audio file")}
               </button>
             </div>
           )}
@@ -599,7 +603,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
           to={'/task/' + t.id}
           className="focus-ring flex items-center justify-center gap-1.5 rounded-control py-2 text-sm font-medium text-accent hover:bg-accent-soft"
         >
-          Open full view — checklist, files, comments, activity <ExternalLink size={14} />
+          Open the full page — dependencies and AI check <ExternalLink size={14} />
         </Link>
       </div>
     )
@@ -612,8 +616,8 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
       <aside className="fixed inset-x-0 bottom-0 top-10 z-50 flex flex-col overflow-hidden rounded-t-2xl bg-app shadow-pop md:inset-x-auto md:inset-y-0 md:right-0 md:top-0 md:w-full md:max-w-[420px] md:rounded-none md:border-l md:border-border min-[1500px]:static min-[1500px]:z-auto min-[1500px]:w-[420px] min-[1500px]:max-w-none min-[1500px]:shadow-none">
         <div className="shrink-0 bg-surface pt-2 md:hidden"><div className="mx-auto h-1 w-10 rounded-full bg-border-strong" /></div>
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-5">
-          <h2 className="text-lg font-semibold text-ink"><span className="md:hidden">Task Details</span><span className="hidden md:inline">Task Detail</span></h2>
-          <button onClick={onClose} title="Close" className="focus-ring grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle">
+          <h2 className="text-lg font-semibold text-ink"><span className="md:hidden">{tr("Task Details")}</span><span className="hidden md:inline">{tr("Task Detail")}</span></h2>
+          <button onClick={onClose} title={tr("Close")} className="focus-ring grid h-9 w-9 place-items-center rounded-control text-ink-secondary hover:bg-subtle">
             <X size={20} />
           </button>
         </div>

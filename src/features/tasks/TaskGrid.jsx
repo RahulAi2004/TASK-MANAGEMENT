@@ -5,6 +5,7 @@ import PriorityFlag from './PriorityFlag'
 import StatusBadge from './StatusBadge'
 import { CategoryChip, SlaChip } from './chips'
 import { taskMeta, taskCategory, elapsedMs, slaStatus, fmtDuration, fmtMinutes, fmtDate, fmtTime } from './taskMeta'
+import { t as tr } from '../../i18n'
 
 const th = 'px-1.5 py-2.5 text-left align-bottom text-[11px] font-medium leading-tight text-ink-secondary'
 const td = 'px-1.5 py-2.5 align-middle'
@@ -27,20 +28,20 @@ export default function TaskGrid({ tasks, now, selectedId, onOpen }) {
       <table className="w-full min-w-[900px] border-collapse">
         <thead>
           <tr className="border-b border-border">
-            <th className={th + ' pl-3'}>Task No.</th>
-            <th className={th}>Task</th>
-            <th className={th}>Category</th>
-            <th className={th}>Department</th>
-            <th className={th}>Order / Ref</th>
-            <th className={th}>Customer</th>
-            <th className={th}>Assigned to</th>
-            <th className={th}>Priority</th>
-            <th className={th}>Started</th>
-            <th className={th}>Time spent</th>
-            <th className={th}>Target time</th>
-            <th className={th}>On time?</th>
-            <th className={th}>Status</th>
-            <th className={th + ' pr-3 text-center'}>Action</th>
+            <th className={th + ' pl-3'}>{tr("Task No.")}</th>
+            <th className={th}>{tr("Task")}</th>
+            <th className={th}>{tr("Category")}</th>
+            <th className={th}>{tr("Department")}</th>
+            <th className={th}>{tr("Order / Ref")}</th>
+            <th className={th}>{tr("Customer")}</th>
+            <th className={th}>{tr("Assigned to")}</th>
+            <th className={th}>{tr("Priority")}</th>
+            <th className={th}>{tr("Started")}</th>
+            <th className={th}>{tr("Time spent")}</th>
+            <th className={th}>{tr("Target time")}</th>
+            <th className={th}>{tr("On time?")}</th>
+            <th className={th}>{tr("Status")}</th>
+            <th className={th + ' pr-3 text-center'}>{tr("Action")}</th>
           </tr>
         </thead>
         <tbody>
@@ -69,7 +70,7 @@ export default function TaskGrid({ tasks, now, selectedId, onOpen }) {
                   {meta.customerName || <span className="text-ink-tertiary">—</span>}
                 </td>
                 <td className={td + ' max-w-[110px] text-ink'}>
-                  {t.assignedUser?.name || <span className="text-ink-tertiary">Unassigned</span>}
+                  {t.assignedUser?.name || <span className="text-ink-tertiary">{tr("Unassigned")}</span>}
                 </td>
                 <td className={td + ' whitespace-nowrap'}>
                   <PriorityFlag priority={t.priority} size="sm" />
@@ -81,7 +82,7 @@ export default function TaskGrid({ tasks, now, selectedId, onOpen }) {
                       <div>{fmtTime(t.startedAt)}</div>
                     </>
                   ) : (
-                    <span className="text-ink-tertiary">Not started</span>
+                    <span className="text-ink-tertiary">{tr("Not started")}</span>
                   )}
                 </td>
                 <td className={td + ' whitespace-nowrap font-semibold text-ink'}>{fmtDuration(elapsedMs(t, now))}</td>
@@ -103,7 +104,7 @@ export default function TaskGrid({ tasks, now, selectedId, onOpen }) {
                       (selected ? 'border-accent bg-accent text-white' : 'border-accent text-accent hover:bg-accent-soft')
                     }
                   >
-                    Open
+                    {tr("Open")}
                   </button>
                 </td>
               </tr>

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Mic, Square, Trash2 } from 'lucide-react'
 import { api } from '../data/api'
+import { t as tr } from '../i18n'
 
 const MAX_SECONDS = 120 // hard stop so payloads stay well under the API limit
 
@@ -93,7 +94,7 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
     startingRef.current = true
     setError(null)
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      setError('Recording is not supported in this browser')
+      setError(tr('Recording is not supported in this browser'))
       startingRef.current = false
       return
     }
@@ -143,7 +144,7 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
         })
       }, 1000)
     } catch {
-      setError('Microphone access denied — allow it in browser settings')
+      setError(tr('Microphone access denied — allow it in browser settings'))
     } finally {
       startingRef.current = false
     }
@@ -181,13 +182,13 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
           <button
             type="button"
             onClick={clear}
-            title="Delete recording"
+            title={tr('Delete recording')}
             className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-control text-ink-tertiary hover:bg-subtle hover:text-status-danger"
           >
             <Trash2 size={15} />
           </button>
         </div>
-        {transcribing && <div className="animate-pulse text-xs text-ink-tertiary">Transcribing…</div>}
+        {transcribing && <div className="animate-pulse text-xs text-ink-tertiary">{tr('Transcribing…')}</div>}
       </div>
     )
   }
@@ -202,7 +203,7 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
             onClick={stop}
             className="focus-ring flex items-center gap-2 rounded-control bg-status-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90"
           >
-            <Square size={13} fill="currentColor" /> Stop
+            <Square size={13} fill="currentColor" /> {tr('Stop')}
           </button>
           <span className="flex items-center gap-1.5 text-sm text-status-danger">
             <span className="h-2 w-2 animate-pulse rounded-full bg-status-danger" />
@@ -222,7 +223,7 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
       <button
         type="button"
         onClick={start}
-        title="Record voice note"
+        title={tr('Record Voice Note')}
         className={
           compact
             ? 'focus-ring grid h-9 w-9 place-items-center rounded-control border border-border-strong bg-surface text-ink-secondary hover:bg-subtle hover:text-accent'
@@ -230,7 +231,7 @@ export default function VoiceRecorder({ value, onChange, compact = false, lang =
         }
       >
         <Mic size={15} />
-        {!compact && 'Record Voice Note'}
+        {!compact && tr('Record Voice Note')}
       </button>
       {error && <div className="text-xs text-status-danger">{error}</div>}
     </div>

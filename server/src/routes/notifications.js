@@ -25,9 +25,28 @@ notificationsRouter.post('/read-all', async (req, res) => {
   res.json({ ok: true })
 })
 
-const REMIND_EVERY_HOURS = 12 // at most one automatic reminder per task per this window
+// Mark one notification read (when it is clicked). Scoped to the caller's own notifications.
+notificationsRouter.post('/:id/read', async (req, res) => {
+  const { count } = await db.notification.updateMany({ where: { id: req.params.id, userId: req.user.id }, data: { isRead: true } })
+  if (!count) return res.status(404).json({ error: 'Notification not found' })
+  res.json({ ok: true })
+})
 
-/** Create a reminder notification for every overdue task's assignee (deduped). */
+// One daily digest per person instead of one reminder per late task every few hours —
+// the old behaviour piled up hundreds of unread reminders and the bell stopped meaning anything.
+const REMINDER_TIMEZONE = process.env.REMINDER_TIMEZONE || 'Asia/Karachi'
+const dayKey = (d) => d.toLocaleDateString('en-CA', { timeZone: REMINDER_TIMEZONE }) // YYYY-MM-DD
+
+export function digestMessage(tasks) {
+  const n = tasks.length
+  const names = tasks.slice(0, 3).map((t) => t.taskNo).join(', ')
+  const more = n > 3 ? ` and ${n - 3} more` : ''
+  return n === 1
+    ? `Daily reminder: ${tasks[0].taskNo} "${tasks[0].title}" is late.`
+    : `Daily reminder: ${n} of your tasks are late — ${names}${more}.`
+}
+
+/** Send each person with late tasks one reminder per day (deduplicated by dedupeKey). */
 export async function sweepOverdueReminders() {
   const now = new Date()
   const overdue = await db.task.findMany({
@@ -38,26 +57,27 @@ export async function sweepOverdueReminders() {
       assignedUserId: { not: null },
     },
     select: { id: true, taskNo: true, title: true, dueAt: true, assignedUserId: true },
+    orderBy: { dueAt: 'asc' },
   })
-  const since = new Date(now.getTime() - REMIND_EVERY_HOURS * 3600_000)
+  const byUser = new Map()
+  for (const t of overdue) byUser.set(t.assignedUserId, [...(byUser.get(t.assignedUserId) || []), t])
+  const today = dayKey(now)
   let created = 0
-  for (const t of overdue) {
-    const already = await db.notification.findFirst({
-      where: { taskId: t.id, userId: t.assignedUserId, type: 'Reminder', createdAt: { gte: since } },
-      select: { id: true },
-    })
-    if (already) continue
+  for (const [userId, tasks] of byUser) {
+    const dedupeKey = `late-digest:${userId}:${today}`
+    if (await db.notification.findFirst({ where: { dedupeKey }, select: { id: true } })) continue
     await db.notification.create({
       data: {
-        userId: t.assignedUserId,
-        taskId: t.id,
+        userId,
+        taskId: tasks.length === 1 ? tasks[0].id : null,
         type: 'Reminder',
-        message: `Reminder: ${t.taskNo} "${t.title}" is overdue (was due ${t.dueAt.toLocaleString()})`,
+        message: digestMessage(tasks),
+        dedupeKey,
       },
     })
     created++
   }
-  if (created) console.log(`[reminders] sent ${created} overdue reminder(s)`)
+  if (created) console.log(`[reminders] sent ${created} daily late-task reminder(s)`)
 }
 
 export function startReminderSweep() {
