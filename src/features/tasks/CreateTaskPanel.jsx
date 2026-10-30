@@ -64,11 +64,12 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
     title: '', taskType: 'General', priority: 'Medium',
     entityType: 'General', entityId: '', assignedUserId: '',
     category: 'General', customerName: '', routineTaskId: '',
-    dueAt: '', estimatedMinutes: '', description: '',
+    dueAt: '', estimatedMinutes: '', description: '', groupId: '',
   })
   const [checklist, setChecklist] = useState([{ item: '', isRequired: true }])
   const [saveAsTemplate, setSaveAsTemplate] = useState(false)
   const [routines, setRoutines] = useState([])
+  const [groups, setGroups] = useState([])
   const MAX_VOICE_NOTES = 5
   const [voiceNotes, setVoiceNotes] = useState([]) // [{ audio, transcript }]
   const [activeNote, setActiveNote] = useState(null) // recording not yet added to the list
@@ -101,8 +102,9 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
     setVoiceNotes([])
     setActiveNote(null)
     setSaveAsTemplate(false)
-    setForm((f) => ({ ...f, routineTaskId: '' }))
+    setForm((f) => ({ ...f, routineTaskId: '', groupId: '' }))
     api.routines({ active: 1 }).then((d) => setRoutines(d.routines)).catch(() => setRoutines([]))
+    api.groups().then((d) => setGroups(d.groups)).catch(() => setGroups([]))
     // Apply template prefill (if any) when the panel opens
     if (initial) {
       setForm((f) => ({ ...f, ...initial }))
@@ -163,6 +165,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
         category: form.category,
         customerName: form.customerName.trim() || undefined,
         routineTaskId: form.routineTaskId || undefined,
+        groupId: form.groupId || undefined,
         assignedUserId: form.assignedUserId,
         description: form.description || undefined,
         dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : undefined,
@@ -327,6 +330,13 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               })}
             </div>
           </div>
+
+          <Field label="Task group">
+            <select className={inputCls} value={form.groupId} onChange={set('groupId')}>
+              <option value="">{tr('No group')}</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{tr(g.name)}</option>)}
+            </select>
+          </Field>
 
           <Field label="Instructions" hint="Type them, or record a voice note below.">
             <textarea

@@ -66,11 +66,26 @@ export default function TopBar() {
     navigate(tasksPath + '?q=' + encodeURIComponent(term))
   }
 
+  const langSwitch = (
+    <div className="flex items-center rounded-full border border-border p-0.5 text-[12px] font-semibold" role="group" aria-label={tr('Language')}>
+      {[['en', 'EN'], ['ur', 'اردو']].map(([key, label]) => (
+        <button
+          key={key}
+          onClick={() => lang !== key && setLang(key)}
+          aria-pressed={lang === key}
+          className={'focus-ring rounded-full px-2.5 py-1 ' + (lang === key ? 'bg-accent text-white' : 'text-ink-secondary hover:text-ink')}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <header className="relative z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 md:px-5">
-      <button onClick={() => navigate('/')} className="focus-ring flex items-center gap-3 rounded-control text-left">
-        <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-accent text-white shadow-sm">
-          <CheckSquare size={22} />
+      <button onClick={() => navigate('/')} className="focus-ring flex shrink-0 items-center gap-2 rounded-control text-left md:gap-3">
+        <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-accent text-white shadow-sm md:h-10 md:w-10">
+          <CheckSquare size={21} />
         </span>
         <span className="hidden leading-tight md:block">
           <span className="block text-[17px] font-semibold text-ink">{tr("Task Management")}</span>
@@ -78,12 +93,17 @@ export default function TopBar() {
         </span>
         {/* Phone: brand wordmark, as in the mobile design */}
         <span className="leading-none md:hidden">
-          <span className="block text-[20px] font-bold tracking-tight text-[#1B3A8C]">Decoinks</span>
+          <span className="block text-[18px] font-bold tracking-tight text-[#1B3A8C]">Decoinks</span>
           <span className="block text-right text-[10px] font-semibold tracking-[0.2em] text-ink">ERP</span>
         </span>
       </button>
 
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-1 md:gap-2">
+        {/* Phones: opens the task list with its search box ready */}
+        <button onClick={() => navigate(tasksPath + '?list=all&search=1')} className={iconBtn + ' order-last md:hidden'} title={tr("Search")}>
+          <Search size={20} />
+        </button>
+
         {/* Search → Task Management list filtered by the term (desktop; phones search on the page) */}
         <div className="hidden md:block">
         {open === 'search' ? (
@@ -112,18 +132,7 @@ export default function TopBar() {
         </div>
 
         {/* Language: English ⇄ Urdu (labels only; the layout stays the same) */}
-        <div className="flex items-center rounded-full border border-border p-0.5 text-[12px] font-semibold" role="group" aria-label={tr('Language')}>
-          {[['en', 'EN'], ['ur', 'اردو']].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => lang !== key && setLang(key)}
-              aria-pressed={lang === key}
-              className={'focus-ring rounded-full px-2.5 py-1 ' + (lang === key ? 'bg-accent text-white' : 'text-ink-secondary hover:text-ink')}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <div className="hidden md:block">{langSwitch}</div>
 
         {/* Notifications */}
         <div className="relative">
@@ -198,14 +207,15 @@ export default function TopBar() {
         </div>
 
         {/* User */}
-        <div className="relative md:ml-2">
-          <button onClick={() => toggle('user')} className="focus-ring flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2 hover:bg-subtle">
+        <div className="relative order-first min-w-0 md:order-none md:ml-2">
+          <button onClick={() => toggle('user')} className="focus-ring flex items-center gap-1.5 rounded-full py-1 pl-1 pr-1 hover:bg-subtle md:gap-2.5 md:pr-2">
             <span
-              className="grid h-10 w-10 place-items-center rounded-full text-sm font-semibold text-white"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-white md:h-10 md:w-10"
               style={{ background: user.color }}
             >
               {initials(user.name)}
             </span>
+            <span className="line-clamp-2 hidden max-w-[72px] text-left text-[13px] font-medium leading-tight text-ink min-[360px]:block md:hidden">{user.name}</span>
             <span className="hidden text-left leading-tight md:block">
               <span className="block text-sm font-semibold text-ink">{user.name}</span>
               <span className="block text-xs text-ink-secondary">{user.title}</span>
@@ -215,6 +225,10 @@ export default function TopBar() {
           {open === 'user' && (
             <div className="absolute right-0 top-14 z-50 w-48 rounded-card border border-border bg-surface py-1 shadow-pop">
               <div className="border-b border-border px-3 py-2 text-xs text-ink-tertiary">{user.email}</div>
+              <div className="flex items-center justify-between border-b border-border px-3 py-2 md:hidden">
+                <span className="text-sm text-ink-secondary">{tr('Language')}</span>
+                {langSwitch}
+              </div>
               <button
                 onClick={logout}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink-secondary hover:bg-subtle hover:text-status-danger"

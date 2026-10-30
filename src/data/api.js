@@ -76,6 +76,8 @@ export const api = {
   reports: () => req('/admin/reports'),
   activity: () => req('/admin/activity'),
   // Routine tasks (Task Settings: reusable definitions with SLA rules)
+  groups: () => req('/groups'),
+  createGroup: (payload) => req('/groups', { method: 'POST', body: JSON.stringify(payload) }),
   routines: (params = {}) => req('/routines?' + new URLSearchParams(params)),
   createRoutine: (payload) => req('/routines', { method: 'POST', body: JSON.stringify(payload) }),
   updateRoutine: (id, payload) => req(`/routines/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),

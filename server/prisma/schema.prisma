@@ -97,6 +97,7 @@ model User {
   notifications Notification[]
   voiceNotes    TaskVoiceNote[]     @relation("voiceNoteRecorder")
   routinesCreated RoutineTask[]     @relation("routineCreator")
+  groupsCreated TaskGroup[]         @relation("groupCreator")
   createdAt     DateTime            @default(now())
 }
 
@@ -113,6 +114,17 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([dedupeKey])
+}
+
+// A shared list of tasks ("Design & Artwork"). A task is in at most one group.
+model TaskGroup {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  color       String   @default("#2563EB")
+  createdById String? // null = one of the starter groups
+  createdBy   User?    @relation("groupCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  createdAt   DateTime @default(now())
 }
 
 model Task {
@@ -149,6 +161,8 @@ model Task {
   // Routine-task provenance + SLA thresholds snapshotted at creation (estimatedMinutes = normal/target)
   routineTaskId      String?
   routineTask        RoutineTask? @relation(fields: [routineTaskId], references: [id], onDelete: SetNull)
+  groupId            String?
+  group              TaskGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
   slaCriticalMinutes Int?
   slaDelayedMinutes  Int?
 

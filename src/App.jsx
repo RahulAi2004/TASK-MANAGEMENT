@@ -1,5 +1,5 @@
-import { Component } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Component, useEffect } from 'react'
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 
 // App-level error boundary so a single screen error never blanks the app.
@@ -45,6 +45,17 @@ import Settings from './routes/Settings'
 
 function RoleRoutes() {
   const { user, loading } = useAuth()
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+
+  // Phones open on Task Management for every role, once per sign-in or app start (admins are already
+  // there; "Home" in the bottom bar still reaches the other roles' dashboards).
+  useEffect(() => {
+    if (user && user.role !== 'ADMIN' && pathname === '/' && window.matchMedia('(max-width: 767px)').matches) {
+      navigate('/all-tasks', { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   if (loading) {
     return <div className="grid min-h-screen place-items-center bg-app text-sm text-ink-tertiary">Loading…</div>

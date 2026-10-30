@@ -33,7 +33,7 @@ function BottomNav({ onSettings }) {
   )
 }
 
-export default function AppShell({ title, subtitle, children, onTasksChanged, actions, aside, hideMobileHeader = false }) {
+export default function AppShell({ title, subtitle, children, onTasksChanged, actions, aside, hideMobileHeader = false, hideMobileAdd = false, createInitial }) {
   const { user } = useAuth()
   const [createOpen, setCreateOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -71,7 +71,7 @@ export default function AppShell({ title, subtitle, children, onTasksChanged, ac
         {aside}
       </div>
       <BottomNav onSettings={() => setSettingsOpen(true)} />
-      {canCreate && (
+      {canCreate && !hideMobileAdd && (
         <button
           onClick={() => setCreateOpen(true)}
           aria-label={tr('New task')}
@@ -80,7 +80,7 @@ export default function AppShell({ title, subtitle, children, onTasksChanged, ac
           <Plus size={28} />
         </button>
       )}
-      <CreateTaskPanel open={createOpen} onClose={() => setCreateOpen(false)} onCreated={onTasksChanged} />
+      <CreateTaskPanel open={createOpen} onClose={() => setCreateOpen(false)} onCreated={onTasksChanged} initial={createInitial} />
       {user.role === 'ADMIN' && <TaskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
     </div>
   )

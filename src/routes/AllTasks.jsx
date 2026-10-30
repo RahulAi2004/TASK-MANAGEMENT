@@ -11,6 +11,8 @@ import TaskGrid from '../features/tasks/TaskGrid'
 import SimpleTaskTable from '../features/tasks/SimpleTaskTable'
 import BulkBar from '../features/tasks/BulkBar'
 import MobileTaskList from '../features/tasks/MobileTaskList'
+import MobileHome from '../features/tasks/MobileHome'
+import { SMART_LISTS, inSmartList, isOpenTask } from '../features/tasks/smartLists'
 import TaskDetailPanel from '../features/tasks/TaskDetailPanel'
 import useNow from '../features/tasks/useNow'
 import { taskCategory, slaStatus, statusLabel, needsMyAction, SLA_STYLE, CATEGORIES as TASK_CATEGORIES } from '../features/tasks/taskMeta'
@@ -34,6 +36,7 @@ const statusOptionLabel = (s) => (s === 'All' ? tr('All statuses') : s === 'Wait
 const VIEW_KEY = 'tm_table_view'
 const FOCUS_KEY = 'tm_focus'
 const HELP_KEY = 'tm_help_dismissed'
+const LAST_GROUP_KEY = 'tm_last_group'
 const readKey = (k, fallback) => {
   try { return localStorage.getItem(k) ?? fallback } catch { return fallback }
 }
@@ -130,6 +133,12 @@ export default function AllTasks() {
   const [q, setQ] = useState(urlQ)
   const [debouncedQ, setDebouncedQ] = useState(urlQ)
   const urlStatus = params.get('status')
+  // Phone: no list chosen → the Smart Lists / Task Groups home; otherwise that list's tasks.
+  const listKey = params.get('list')
+  const groupId = params.get('group')
+  const smartList = SMART_LISTS.find((l) => l.key === listKey)
+  const mobileHome = !listKey && !groupId && !urlQ && !urlStatus
+  const [lastGroupId, setLastGroupId] = useState(() => readKey(LAST_GROUP_KEY, null))
   const [f, setF] = useState(() => ({ ...DEFAULTS, ...(urlStatus && STATUSES.includes(urlStatus) ? { status: urlStatus } : {}) }))
   const [page, setPage] = useState(1)
   const set = (k) => (v) => { setF((x) => ({ ...x, [k]: v })); setPage(1) }
@@ -161,6 +170,14 @@ export default function AllTasks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlStatus])
 
+  // Each list starts clean, and the home counts are never narrowed by an earlier list's filters.
+  useEffect(() => {
+    setF({ ...DEFAULTS, ...(urlStatus && STATUSES.includes(urlStatus) ? { status: urlStatus } : {}) })
+    setQ(urlQ)
+    setDebouncedQ(urlQ)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey, groupId])
+
   // Top-bar search lands here as ?q=
   useEffect(() => { setQ(urlQ); setDebouncedQ(urlQ) }, [urlQ])
   useEffect(() => {
@@ -182,6 +199,8 @@ export default function AllTasks() {
     [isAdmin, f.status, debouncedQ, f.range]
   )
   const reloadAll = () => { stats.reload(); list.reload() }
+  const groups = useApi(() => api.groups(), [])
+  const groupList = groups.data?.groups || []
 
   const all = list.data?.tasks || []
   // Dropdown options come from the loaded rows so they only list values that exist.
@@ -199,7 +218,13 @@ export default function AllTasks() {
       (f.owner === 'All' || (f.owner === 'none' ? !t.assignedUser : t.assignedUser?.id === f.owner))
   )
   // SLA chip counts (phone) are taken before the SLA filter, so each chip shows what it would select.
-  const slaCounts = baseRows.reduce((m, t) => { const s = slaStatus(t, now); if (s) m[s] = (m[s] || 0) + 1; return m }, {})
+  const inMobileList = (t) => {
+    const statusFiltered = f.status !== 'All'
+    if (groupId) return t.groupId === groupId && (statusFiltered || isOpenTask(t))
+    return smartList ? inSmartList(smartList, t, user, statusFiltered) : true
+  }
+  const mobileBase = baseRows.filter(inMobileList)
+  const slaCounts = mobileBase.reduce((m, t) => { const s = slaStatus(t, now); if (s) m[s] = (m[s] || 0) + 1; return m }, {})
   const slaRows = f.sla === 'All' ? baseRows : baseRows.filter((t) => slaStatus(t, now) === f.sla)
   const mineCount = slaRows.filter((t) => needsMyAction(t, user)).length
   const rows = focus === 'mine' ? slaRows.filter((t) => needsMyAction(t, user)) : slaRows
@@ -231,6 +256,14 @@ export default function AllTasks() {
   }
   const openTask = (id) => setParams((p) => { p.set('task', id); return p })
   const closeTask = () => setParams((p) => { p.delete('task'); return p })
+  const openList = (key) => setParams({ list: key })
+  const openGroup = (id) => {
+    writeKey(LAST_GROUP_KEY, id)
+    setLastGroupId(id)
+    setParams({ group: id })
+  }
+  const group = groupList.find((g) => g.id === groupId)
+  const mobileTitle = group ? tr(group.name) : smartList ? tr(smartList.label) : isAdmin ? tr('All tasks') : tr('My tasks')
 
   return (
     <AppShell
@@ -248,15 +281,28 @@ export default function AllTasks() {
         )
       }
       hideMobileHeader
+      hideMobileAdd={mobileHome}
+      createInitial={groupId ? { groupId } : undefined}
       aside={selectedId && <TaskDetailPanel key={selectedId} taskId={selectedId} onClose={closeTask} onChanged={reloadAll} />}
     >
+      {mobileHome ? (
+        <MobileHome
+          tasks={all} groups={groupList} user={user} lastGroupId={lastGroupId}
+          onOpenList={openList} onOpenGroup={openGroup} onAllTasks={() => openList('all')}
+          onGroupCreated={(g) => { groups.reload(); openGroup(g.id) }}
+          loading={list.loading} error={list.error || groups.error}
+        />
+      ) : (
       <MobileTaskList
-        title={isAdmin ? tr('All tasks') : tr('My tasks')}
-        tasks={rows} slaCounts={slaCounts} f={f} set={set} q={q} setQ={setQ}
+        title={mobileTitle}
+        onBack={() => setParams({})}
+        autoFocusSearch={params.has('search')}
+        tasks={f.sla === 'All' ? mobileBase : mobileBase.filter((t) => slaStatus(t, now) === f.sla)} slaCounts={slaCounts} f={f} set={set} q={q} setQ={setQ}
         onOpen={openTask} selectedId={selectedId} isAdmin={isAdmin} modules={modules} owners={owners}
         ranges={RANGES} statuses={STATUSES} filtersActive={filtersActive} clearFilters={clearFilters}
         now={now} loading={list.loading} error={list.error}
       />
+      )}
       <div className="hidden space-y-4 md:block">
         {helpOpen && (
           <section className="relative flex gap-3 rounded-card border border-accent-softborder bg-accent-soft/40 p-4 pr-12">

@@ -131,6 +131,32 @@ test('PATCH changes the due date (creator or admin only, open tasks only)', asyn
   assert.equal((await call('PATCH', `/tasks/${id}`, admin.token, { dueAt: due })).status, 422)
 })
 
+test('task groups: starter groups, create rules, tasks go in and out', async () => {
+  const { data } = await call('GET', '/groups', designer.token)
+  assert.equal(data.groups.length, 8)
+  assert.equal(data.groups[0].name, 'Decoinks Operations')
+
+  assert.equal((await call('POST', '/groups', designer.token, { name: 'Nope' })).status, 403)
+  assert.equal((await call('POST', '/groups', admin.token, { name: '  ' })).status, 400)
+  assert.equal((await call('POST', '/groups', admin.token, { name: 'design & artwork' })).status, 409)
+  const made = await call('POST', '/groups', admin.token, { name: 'Printing', color: '#16A34A' })
+  assert.equal(made.status, 201)
+  const groupId = made.data.group.id
+
+  assert.equal((await call('POST', '/tasks', admin.token, newTask({ groupId: 'missing' }))).status, 400)
+  const created = await call('POST', '/tasks', admin.token, newTask({ title: 'In a group', groupId }))
+  assert.equal(created.status, 201)
+  const id = created.data.task?.id ?? created.data.id
+  const list = (await call('GET', '/tasks?scope=all&limit=500', admin.token)).data.tasks
+  assert.equal(list.find((t) => t.id === id).groupId, groupId)
+
+  assert.equal((await call('PATCH', `/tasks/${id}`, designer.token, { groupId: null })).status, 403)
+  assert.equal((await call('PATCH', `/tasks/${id}`, admin.token, { groupId: 'missing' })).status, 400)
+  assert.equal((await call('PATCH', `/tasks/${id}`, admin.token, { groupId: null })).status, 200)
+  const t = (await call('GET', `/tasks/${id}`, admin.token)).data
+  assert.equal((t.task ?? t).groupId, null)
+})
+
 test('late tasks become one daily digest per person, and clicking marks it read', async () => {
   const past = new Date(Date.now() - 2 * 86400_000).toISOString()
   for (const title of ['Late one', 'Late two']) {

@@ -96,6 +96,11 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
     }
   }
 
+  // ── Task group (same permission as the server: admin or creator, while the task is open) ──
+  const groups = useApi(() => api.groups(), [])
+  const canMoveGroup = t && (user.role === 'ADMIN' || t.createdBy?.id === user.id) && !['Completed', 'Cancelled'].includes(t.status)
+  const moveToGroup = (groupId) => run(() => api.updateTask(t.id, { groupId }))
+
   // ── Status actions ────────────────────────────────────────────────────────
   const [pending, setPending] = useState(null) // { event, label } needing a note (submit / reject)
   const [pendingText, setPendingText] = useState('')
@@ -442,6 +447,20 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
               <Row label="Order / Ref"><span className="font-medium text-accent">{t.entityId}</span></Row>
               <Row label="Customer">{meta.customerName || '—'}</Row>
               <Row label="Priority"><PriorityFlag priority={t.priority} /></Row>
+              <Row label="Task group">
+                {canMoveGroup ? (
+                  <select
+                    value={t.groupId || ''}
+                    onChange={(e) => moveToGroup(e.target.value || null)}
+                    className="focus-ring h-8 w-full max-w-[150px] rounded-control border border-border-strong bg-surface px-1.5 text-[13px] text-ink"
+                  >
+                    <option value="">{tr('No group')}</option>
+                    {(groups.data?.groups || []).map((g) => <option key={g.id} value={g.id}>{tr(g.name)}</option>)}
+                  </select>
+                ) : (
+                  tr((groups.data?.groups || []).find((g) => g.id === t.groupId)?.name || 'No group')
+                )}
+              </Row>
             </div>
             <div className="sm:pl-4">
                             <Row label="Created">

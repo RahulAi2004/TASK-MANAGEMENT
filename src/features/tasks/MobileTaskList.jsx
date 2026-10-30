@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import {
   List, LayoutGrid, Search, SlidersHorizontal, Tag, ChevronDown, ChevronRight, Clock, X, CheckCircle2,
-  AlertTriangle, AlertCircle, RotateCw,
+  AlertTriangle, AlertCircle, RotateCw, ArrowLeft,
 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import PriorityFlag from './PriorityFlag'
@@ -64,7 +64,7 @@ function TimeLabel({ t, now }) {
   )
 }
 
-function Sheet({ title, onClose, children }) {
+export function Sheet({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/30 md:hidden" onClick={onClose}>
       <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
@@ -83,7 +83,7 @@ function Sheet({ title, onClose, children }) {
 
 export default function MobileTaskList({
   title, tasks, slaCounts, f, set, q, setQ, onOpen, selectedId, isAdmin, modules, owners, ranges, statuses,
-  filtersActive, clearFilters, now, loading, error,
+  filtersActive, clearFilters, now, loading, error, onBack, autoFocusSearch = false,
 }) {
   const [view, setView] = useState('list')
   const [typeOpen, setTypeOpen] = useState(false)
@@ -97,6 +97,9 @@ export default function MobileTaskList({
   return (
     <div className="md:hidden">
       {/* Title + List/Cards */}
+      <button onClick={onBack} className="focus-ring -ml-1 mb-1 flex items-center gap-1 rounded-control py-1 pr-2 text-[14px] font-medium text-accent">
+        <ArrowLeft size={18} /> {tr('Lists')}
+      </button>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[28px] font-bold leading-tight text-ink">{title}</h1>
@@ -153,6 +156,7 @@ export default function MobileTaskList({
         <label className="relative block flex-1">
           <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-secondary" />
           <input
+            autoFocus={autoFocusSearch}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={tr("Search tasks…")}

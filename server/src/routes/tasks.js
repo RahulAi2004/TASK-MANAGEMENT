@@ -175,6 +175,7 @@ const CreateSchema = z.object({
   affectedSystem: z.string().optional(),
   customerName: z.string().max(160).optional(),
   routineTaskId: z.string().optional(),
+  groupId: z.string().optional(),
   category: z.enum(['Order Related', 'General', 'Admin']).optional(),
   voiceNote: z.string().regex(/^data:audio\//, 'Voice note must be an audio data URL').max(14_000_000).optional(),
   voiceTranscript: z.string().max(4000).optional(),
@@ -211,6 +212,10 @@ tasksRouter.post('/', async (req, res) => {
     if (!routine) return res.status(400).json({ error: 'Routine task not found or inactive' })
   }
 
+  if (data.groupId && !(await db.taskGroup.findUnique({ where: { id: data.groupId } }))) {
+    return res.status(400).json({ error: 'Task group not found' })
+  }
+
   // Year-scoped human number (unique; retried if a simultaneous create took it)
   const task = await withTaskNo((taskNo) => db.task.create({
     data: {
@@ -227,6 +232,7 @@ tasksRouter.post('/', async (req, res) => {
       assignedUserId: assignee.id,
       departmentId: routine?.departmentId ?? assignee.departmentId ?? undefined,
       routineTaskId: routine?.id,
+      groupId: data.groupId,
       slaCriticalMinutes: routine?.criticalMinutes,
       slaDelayedMinutes: routine?.delayedMinutes,
       createdById: req.user.id,
@@ -343,13 +349,14 @@ tasksRouter.post('/:id/transition', async (req, res) => {
   res.json({ task: updated })
 })
 
-// ── Edit due date / priority (used one-by-one and by bulk actions) ─────────
+// ── Edit due date / priority / group (used one-by-one and by bulk actions) ─────────
 const EditSchema = z
   .object({
     dueAt: z.string().datetime().nullable().optional(), // null clears the due date
     priority: z.enum(['Urgent', 'High', 'Medium', 'Low']).optional(),
+    groupId: z.string().nullable().optional(), // null takes it out of its group
   })
-  .refine((d) => d.dueAt !== undefined || d.priority !== undefined, 'Nothing to change')
+  .refine((d) => d.dueAt !== undefined || d.priority !== undefined || d.groupId !== undefined, 'Nothing to change')
 tasksRouter.patch('/:id', async (req, res) => {
   const p = EditSchema.safeParse(req.body)
   if (!p.success) return res.status(400).json({ error: p.error.issues[0]?.message || 'Invalid payload' })
@@ -368,6 +375,12 @@ tasksRouter.patch('/:id', async (req, res) => {
   if (p.data.priority && p.data.priority !== task.priority) {
     data.priority = p.data.priority
     notes.push(`Priority ${task.priority} → ${p.data.priority}`)
+  }
+  if (p.data.groupId !== undefined && p.data.groupId !== task.groupId) {
+    const group = p.data.groupId ? await db.taskGroup.findUnique({ where: { id: p.data.groupId } }) : null
+    if (p.data.groupId && !group) return res.status(400).json({ error: 'Task group not found' })
+    data.groupId = p.data.groupId
+    notes.push(group ? `Moved to group ${group.name}` : 'Removed from its group')
   }
   const updated = await db.task.update({ where: { id: task.id }, data, include: listInclude })
   if (notes.length) await db.activity.create({ data: { taskId: task.id, activityType: 'Edited', performedById: req.user.id, notes: notes.join(' · ') } })
