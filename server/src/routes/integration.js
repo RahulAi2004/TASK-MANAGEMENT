@@ -42,7 +42,8 @@ integrationRouter.get('/sla-tasks', async (_req, res) => {
     orderBy: { dueAt: 'asc' },
   })
   res.json({
-    tasks: tasks.map((t) => ({
+    // Demo tasks (scripts/demo-tasks.mjs) stay inside this app
+    tasks: tasks.filter((t) => !t.metadata?.includes('"demo":true')).map((t) => ({
       id: t.id, taskNo: t.taskNo, title: t.title, description: t.description, taskType: t.taskType,
       entityType: t.entityType, entityId: t.entityId, department: t.department?.name || null,
       priority: t.priority, status: t.status, dueAt: t.dueAt, createdAt: t.createdAt,

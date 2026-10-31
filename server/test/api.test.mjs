@@ -19,6 +19,7 @@ const env = {
   ADMIN_EMAIL: 'admin@test.local',
   ADMIN_PASSWORD: 'Admin@123',
   PASSWORD_LOGIN_ROLES: 'ADMIN,DESIGNER',
+  SLA_BRIDGE_SECRET: 'test-bridge-secret',
   PORT: String(PORT),
 }
 let server
@@ -195,6 +196,30 @@ test('tasks accept options added at runtime and refuse unknown ones', async () =
   const reason = (await call('GET', '/options', admin.token)).data.options.find((o) => o.value === 'Power cut')
   await call('PATCH', `/options/${reason.id}`, admin.token, { isActive: false })
   assert.equal((await late('Power cut')).status, 200)
+})
+
+test('demo tasks: add once, stay out of the Printshop feed, remove completely', async () => {
+  const script = (flags) => execSync('node scripts/demo-tasks.mjs ' + flags, { cwd: SERVER_DIR, env, encoding: 'utf8' })
+  const demo = async () => (await call('GET', '/tasks?scope=all&limit=500', admin.token)).data.tasks.filter((t) => t.title.startsWith('[DEMO] '))
+  const feed = async () => (await (await fetch(BASE + '/integration/sla-tasks', { headers: { 'x-decoinks-bridge-secret': env.SLA_BRIDGE_SECRET } })).json()).tasks
+
+  script('') // a dry run changes nothing
+  assert.equal((await demo()).length, 0)
+  script('--apply')
+  const added = await demo()
+  assert.equal(added.length, 10)
+  assert.ok(added.every((t) => t.assignedUser.id === admin.user.id && t.groupId))
+  assert.equal(new Set(added.map((t) => t.status)).size, 6)
+  assert.match(script('--apply'), /already there/)
+  assert.equal((await demo()).length, 10)
+  assert.ok((await feed()).every((t) => !t.title.startsWith('[DEMO] ')))
+  // someone used one before the clean-up: it still goes, with what was attached
+  assert.equal((await call('POST', `/tasks/${added[0].id}/comments`, admin.token, { commentText: 'hello' })).status < 300, true)
+
+  script('--remove')
+  assert.equal((await demo()).length, 10)
+  script('--remove --apply')
+  assert.equal((await demo()).length, 0)
 })
 
 test('late tasks become one daily digest per person, and clicking marks it read', async () => {
