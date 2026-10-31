@@ -259,7 +259,7 @@ export default {
   'Bug Fix': 'بگ ٹھیک کرنا',
   'Hardware': 'ہارڈ ویئر',
   'Access Request': 'رسائی کی درخواست',
-  '+ Add new…': '+ نیا شامل کریں…',
+  'Add new option': 'نیا آپشن شامل کریں',
   'Type the new option': 'نیا آپشن لکھیں',
   'Add a new option…': 'نیا آپشن شامل کریں…',
   'Dropdown options': 'ڈراپ ڈاؤن آپشنز',

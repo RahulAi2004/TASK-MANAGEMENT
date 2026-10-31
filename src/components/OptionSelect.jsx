@@ -1,12 +1,10 @@
-// A dropdown backed by an editable list. The last choice, "+ Add new…", swaps in a text box so a
-// missing option can be added on the spot without leaving the form (admin and sales only).
+// A dropdown backed by an editable list. The + button beside it swaps in a text box so a missing
+// option can be added on the spot without leaving the form (admin and sales only).
 import { useState } from 'react'
-import { Check, X } from 'lucide-react'
+import { Check, Plus, X } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { useOptions, optionLabel } from '../data/useOptions'
 import { t as tr } from '../i18n'
-
-const ADD = '__add_new__'
 
 export default function OptionSelect({ list, value, onChange, placeholder, className = '' }) {
   const { user } = useAuth()
@@ -65,14 +63,22 @@ export default function OptionSelect({ list, value, onChange, placeholder, class
   }
 
   return (
-    <select
-      value={value}
-      onChange={(e) => (e.target.value === ADD ? setAdding(true) : onChange(e.target.value))}
-      className={className}
-    >
-      {placeholder !== undefined && <option value="">{placeholder}</option>}
-      {shown.map((v) => <option key={v} value={v}>{optionLabel(list, v)}</option>)}
-      {canAdd && <option value={ADD}>{tr('+ Add new…')}</option>}
-    </select>
+    <span className="flex gap-1.5">
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={className + ' min-w-0 flex-1'}>
+        {placeholder !== undefined && <option value="">{placeholder}</option>}
+        {shown.map((v) => <option key={v} value={v}>{optionLabel(list, v)}</option>)}
+      </select>
+      {canAdd && (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          aria-label={tr('Add new option')}
+          title={tr('Add new option')}
+          className="focus-ring grid w-10 shrink-0 place-items-center rounded-control border border-accent bg-accent-soft text-accent hover:bg-accent hover:text-white"
+        >
+          <Plus size={18} />
+        </button>
+      )}
+    </span>
   )
 }
