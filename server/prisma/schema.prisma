@@ -98,6 +98,7 @@ model User {
   voiceNotes    TaskVoiceNote[]     @relation("voiceNoteRecorder")
   routinesCreated RoutineTask[]     @relation("routineCreator")
   groupsCreated TaskGroup[]         @relation("groupCreator")
+  optionsCreated TaskOption[]       @relation("optionCreator")
   createdAt     DateTime            @default(now())
 }
 
@@ -114,6 +115,21 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([dedupeKey])
+}
+
+// One choice in an editable dropdown. list = workType | category | linkedTo | delayReason.
+// Tasks store the text itself, so hiding (isActive = false) leaves existing tasks unchanged.
+model TaskOption {
+  id          String   @id @default(uuid())
+  list        String
+  value       String
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdById String? // null = shipped with the app
+  createdBy   User?    @relation("optionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@unique([list, value])
 }
 
 // A shared list of tasks ("Design & Artwork"). A task is in at most one group.

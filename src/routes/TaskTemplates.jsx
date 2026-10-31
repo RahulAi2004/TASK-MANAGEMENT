@@ -5,11 +5,11 @@ import { Plus, Bot, Pencil, CheckCircle2, Trash2 } from 'lucide-react'
 import AppShell from '../app/AppShell'
 import Modal, { modalInput, Toast } from '../components/Modal'
 import CreateTaskPanel from '../features/tasks/CreateTaskPanel'
+import OptionSelect from '../components/OptionSelect'
 import { api } from '../data/api'
 
 const DEPT_COLOR = { DESIGN: '#5B4BE6', PRODUCTION: '#0F7B6C', QA: '#C19C00', PROCUREMENT: '#E8710A', IT: '#605E5C', SALES: '#1A66E5' }
 const PRIOS = ['Urgent', 'High', 'Medium', 'Low']
-const ENTITY_TYPES = ['Artwork', 'Sales Order', 'Lead', 'System']
 const SLA_OPTS = [['Rush — 2h', 2], ['Same day — 8h', 8], ['Standard — 24h', 24], ['No SLA', null]]
 const slaLabel = (h) => (h == null ? 'No SLA' : `${h}h`)
 const parseChecklist = (json) => { try { return JSON.parse(json || '[]') } catch { return [] } }
@@ -54,11 +54,11 @@ function TemplateForm({ open, onClose, onSave, editing, departments, saving }) {
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-ink-secondary">Task type</span>
-            <input className={modalInput} value={f.taskType} onChange={set('taskType')} placeholder="Background Removal" />
+            <OptionSelect list="workType" className={modalInput} value={f.taskType} onChange={(v) => set('taskType')({ target: { value: v } })} placeholder="Same as the template name" />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-ink-secondary">Related module</span>
-            <select className={modalInput} value={f.entityType} onChange={set('entityType')}>{ENTITY_TYPES.map((e) => <option key={e}>{e}</option>)}</select>
+            <OptionSelect list="linkedTo" className={modalInput} value={f.entityType} onChange={(v) => set('entityType')({ target: { value: v } })} />
           </label>
         </div>
         <label className="block">

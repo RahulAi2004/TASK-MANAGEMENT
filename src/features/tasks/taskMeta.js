@@ -18,7 +18,6 @@ export function taskCategory(t) {
   return /order/i.test(t?.entityType || '') ? 'Order Related' : 'General'
 }
 
-export const CATEGORIES = ['Order Related', 'General', 'Admin']
 export const CATEGORY_STYLE = {
   'Order Related': { bg: '#EAF2FF', fg: '#1A66E5' },
   General: { bg: '#F1EBFD', fg: '#6B47D6' },
@@ -224,16 +223,6 @@ export function allowedEvents(t, user) {
     return isCreator || isAdmin
   }).map((x) => ({ ...x, label: tr(x.label) }))
 }
-
-export const DELAY_REASONS = [
-  'Waiting on customer',
-  'Waiting on another department',
-  'Missing information / files',
-  'Rework requested',
-  'Technical / system issue',
-  'High workload',
-  'Other',
-]
 
 /** Where a task opens: the Task Management page with its side panel (admin home is "/"). */
 export function taskPanelPath(user, id) {

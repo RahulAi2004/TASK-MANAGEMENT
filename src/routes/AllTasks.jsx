@@ -15,13 +15,13 @@ import MobileHome from '../features/tasks/MobileHome'
 import { SMART_LISTS, inSmartList, isOpenTask } from '../features/tasks/smartLists'
 import TaskDetailPanel from '../features/tasks/TaskDetailPanel'
 import useNow from '../features/tasks/useNow'
-import { taskCategory, slaStatus, statusLabel, needsMyAction, SLA_STYLE, CATEGORIES as TASK_CATEGORIES } from '../features/tasks/taskMeta'
+import { taskCategory, slaStatus, statusLabel, needsMyAction, SLA_STYLE } from '../features/tasks/taskMeta'
+import { useOptions } from '../data/useOptions'
 import { api } from '../data/api'
 import { useApi, useAuth } from '../auth/AuthContext'
 import { t as tr } from '../i18n'
 
 const STATUSES = ['All', 'Pending', 'Assigned', 'In Progress', 'Waiting / On Hold', 'Submitted', 'Completed', 'Rejected', 'Cancelled', 'Overdue']
-const CATEGORIES = ['All', ...TASK_CATEGORIES]
 const SLAS = ['All', 'Normal', 'Critical', 'Delayed']
 const RANGES = [
   { key: 'all', label: 'All time' },
@@ -127,6 +127,7 @@ export default function AllTasks() {
   const { user } = useAuth()
   const isAdmin = user.role === 'ADMIN'
   const [params, setParams] = useSearchParams()
+  const options = useOptions()
   const selectedId = params.get('task')
   const urlQ = params.get('q') || ''
 
@@ -203,6 +204,7 @@ export default function AllTasks() {
   const groupList = groups.data?.groups || []
 
   const all = list.data?.tasks || []
+  const categories = [...new Set([...options.active('category'), ...all.map(taskCategory)])]
   // Dropdown options come from the loaded rows so they only list values that exist.
   const modules = useMemo(() => [...new Set(all.map((t) => t.department?.name).filter(Boolean))].sort(), [all])
   const owners = useMemo(() => {
@@ -295,6 +297,7 @@ export default function AllTasks() {
       ) : (
       <MobileTaskList
         title={mobileTitle}
+        categories={categories}
         onBack={() => setParams({})}
         autoFocusSearch={params.has('search')}
         tasks={f.sla === 'All' ? mobileBase : mobileBase.filter((t) => slaStatus(t, now) === f.sla)} slaCounts={slaCounts} f={f} set={set} q={q} setQ={setQ}
@@ -371,7 +374,8 @@ export default function AllTasks() {
           {moreOpen && (
             <div className="mt-3 grid grid-cols-1 gap-3 border-t border-border pt-3 sm:grid-cols-2 xl:grid-cols-4">
               <Select label="Category" value={f.category} onChange={set('category')}>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c === 'All' ? tr('All categories') : tr(c)}</option>)}
+                <option value="All">{tr('All categories')}</option>
+                {categories.map((c) => <option key={c} value={c}>{tr(c)}</option>)}
               </Select>
               <Select label="Department" value={f.module} onChange={set('module')}>
                 <option value="All">{tr("All departments")}</option>

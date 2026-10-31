@@ -10,7 +10,7 @@ import StatusBadge from './StatusBadge'
 import PriorityFlag from './PriorityFlag'
 import { CategoryChip } from './chips'
 import { initials } from '../../auth/AuthContext'
-import { taskMeta, taskCategory, elapsedMs, slaStatus, fmtDuration, fmtMinutes, fmtDate, fmtTime, CATEGORIES, statusLabel } from './taskMeta'
+import { taskMeta, taskCategory, elapsedMs, slaStatus, fmtDuration, fmtMinutes, fmtDate, fmtTime, statusLabel } from './taskMeta'
 import { t as tr } from '../../i18n'
 
 const STATUS_CHIPS = [
@@ -83,7 +83,7 @@ export function Sheet({ title, onClose, children }) {
 
 export default function MobileTaskList({
   title, tasks, slaCounts, f, set, q, setQ, onOpen, selectedId, isAdmin, modules, owners, ranges, statuses,
-  filtersActive, clearFilters, now, loading, error, onBack, autoFocusSearch = false,
+  filtersActive, clearFilters, now, loading, error, onBack, autoFocusSearch = false, categories = [],
 }) {
   const [view, setView] = useState('list')
   const [typeOpen, setTypeOpen] = useState(false)
@@ -191,7 +191,7 @@ export default function MobileTaskList({
                 <span className="text-[15px] font-semibold text-ink">{tr("Category")}</span>
                 <button onClick={() => setTypeOpen(false)} aria-label={tr("Close")} className="text-ink-secondary"><X size={18} /></button>
               </div>
-              {['All', ...CATEGORIES].map((c) => (
+              {['All', ...categories].map((c) => (
                 <button
                   key={c}
                   onClick={() => { set('category')(c); setTypeOpen(false); setLimit(10) }}

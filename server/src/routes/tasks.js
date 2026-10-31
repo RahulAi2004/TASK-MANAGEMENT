@@ -6,6 +6,7 @@ import { canPerform } from '../lib/stateMachine.js'
 import { addDependency, removeDependency, onTaskCompleted } from '../lib/dependencies.js'
 import { runArtworkAnalysis } from '../lib/ai.js'
 import { withTaskNo } from '../lib/templates.js'
+import { optionExists } from './options.js'
 
 export const tasksRouter = Router()
 tasksRouter.use(authRequired)
@@ -176,7 +177,7 @@ const CreateSchema = z.object({
   customerName: z.string().max(160).optional(),
   routineTaskId: z.string().optional(),
   groupId: z.string().optional(),
-  category: z.enum(['Order Related', 'General', 'Admin']).optional(),
+  category: z.string().max(60).optional(),
   voiceNote: z.string().regex(/^data:audio\//, 'Voice note must be an audio data URL').max(14_000_000).optional(),
   voiceTranscript: z.string().max(4000).optional(),
   voiceNotes: z
@@ -212,6 +213,9 @@ tasksRouter.post('/', async (req, res) => {
     if (!routine) return res.status(400).json({ error: 'Routine task not found or inactive' })
   }
 
+  if (data.category && !(await optionExists('category', data.category))) {
+    return res.status(400).json({ error: 'Unknown category' })
+  }
   if (data.groupId && !(await db.taskGroup.findUnique({ where: { id: data.groupId } }))) {
     return res.status(400).json({ error: 'Task group not found' })
   }
@@ -525,13 +529,9 @@ tasksRouter.delete('/:id/dependencies/:depId', async (req, res) => {
 
 // ── Status note: current issue + reason for delay (Task Detail panel) ────────
 // Stored in task.metadata (JSON) alongside customerName/category; every save is audited.
-const DELAY_REASONS = [
-  'Waiting on customer', 'Waiting on another department', 'Missing information / files',
-  'Rework requested', 'Technical / system issue', 'High workload', 'Other',
-]
 const NoteSchema = z.object({
   currentStatus: z.string().max(500).optional(),
-  delayReason: z.enum(DELAY_REASONS).optional(),
+  delayReason: z.string().max(60).optional(),
   delayRemarks: z.string().max(500).optional(),
 })
 tasksRouter.patch('/:id/notes', async (req, res) => {
@@ -540,6 +540,7 @@ tasksRouter.patch('/:id/notes', async (req, res) => {
   const task = await db.task.findFirst({ where: { id: req.params.id, ...visibilityWhere(req.user), deletedAt: null } })
   if (!task) return res.status(404).json({ error: 'Task not found' })
   if (p.data.delayReason && !p.data.delayRemarks?.trim()) return res.status(400).json({ error: 'Remarks are required with a delay reason' })
+  if (p.data.delayReason && !(await optionExists('delayReason', p.data.delayReason))) return res.status(400).json({ error: 'Unknown delay reason' })
 
   let meta = {}
   try { meta = JSON.parse(task.metadata || '{}') } catch { meta = {} }

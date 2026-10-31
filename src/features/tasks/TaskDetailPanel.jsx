@@ -3,6 +3,7 @@
 // current status · reason for delay · recordings. Checklist/files/comments/activity live in
 // the full working view (/task/:id), linked at the bottom.
 import { useRef, useState } from 'react'
+import OptionSelect from '../../components/OptionSelect'
 import { Link } from 'react-router-dom'
 import {
   X, AlertCircle, Clock, CheckCircle2, Mic, Paperclip, Play, Pause,
@@ -16,7 +17,7 @@ import TaskTabs from './TaskTabs'
 import useNow from './useNow'
 import {
   taskMeta, taskCategory, elapsedMs, slaStatus, SLA_STYLE, fmtDuration, fmtMinutes, fmtDate,
-  fmtTime, fmtClock, allowedEvents, statusSentence, DELAY_REASONS,
+  fmtTime, fmtClock, allowedEvents, statusSentence,
 } from './taskMeta'
 import { api } from '../../data/api'
 import { useApi, useAuth, initials } from '../../auth/AuthContext'
@@ -402,10 +403,7 @@ export default function TaskDetailPanel({ taskId, onClose, onChanged }) {
                     <span className="mb-1.5 block text-[13px] font-semibold text-ink">
                       {tr("Reason")}
                     </span>
-                    <select value={reason} onChange={(e) => setReason(e.target.value)} className={inputCls}>
-                      <option value="">{tr("Select a reason")}</option>
-                      {DELAY_REASONS.map((r) => <option key={r} value={r}>{tr(r)}</option>)}
-                    </select>
+                    <OptionSelect list="delayReason" value={reason} onChange={setReason} placeholder={tr("Select a reason")} className={inputCls} />
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-[13px] font-semibold text-ink">

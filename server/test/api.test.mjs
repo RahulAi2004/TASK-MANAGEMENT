@@ -157,6 +157,46 @@ test('task groups: starter groups, create rules, tasks go in and out', async () 
   assert.equal((t.task ?? t).groupId, null)
 })
 
+test('dropdown options: add, reuse, hide, locked ones stay', async () => {
+  const list = async (token, name) => (await call('GET', '/options', token)).data.options.filter((o) => o.list === name)
+  const before = await list(designer.token, 'workType')
+  assert.ok(before.some((o) => o.value === 'Background Removal'))
+  assert.equal((await list(admin.token, 'delayReason')).length, 7)
+
+  assert.equal((await call('POST', '/options', designer.token, { list: 'workType', value: 'Nope' })).status, 403)
+  assert.equal((await call('POST', '/options', admin.token, { list: 'bogus', value: 'X' })).status, 400)
+  assert.equal((await call('POST', '/options', admin.token, { list: 'workType', value: '  ' })).status, 400)
+  const made = await call('POST', '/options', admin.token, { list: 'workType', value: 'Embroidery' })
+  assert.equal(made.status, 201)
+  // the same name in other capitals is the same option, not a second one
+  const again = await call('POST', '/options', admin.token, { list: 'workType', value: 'embroidery' })
+  assert.equal(again.data.option.id, made.data.option.id)
+  assert.equal((await list(admin.token, 'workType')).length, before.length + 1)
+
+  const id = made.data.option.id
+  assert.equal((await call('PATCH', `/options/${id}`, designer.token, { isActive: false })).status, 403)
+  assert.equal((await call('PATCH', `/options/${id}`, admin.token, { isActive: false })).data.option.isActive, false)
+  assert.equal((await call('POST', '/options', admin.token, { list: 'workType', value: 'Embroidery' })).data.option.isActive, true)
+  const general = before.find((o) => o.value === 'General')
+  assert.equal((await call('PATCH', `/options/${general.id}`, admin.token, { isActive: false })).status, 422)
+})
+
+test('tasks accept options added at runtime and refuse unknown ones', async () => {
+  await call('POST', '/options', admin.token, { list: 'category', value: 'Marketing' })
+  await call('POST', '/options', admin.token, { list: 'delayReason', value: 'Power cut' })
+  assert.equal((await call('POST', '/tasks', admin.token, newTask({ category: 'Nonsense' }))).status, 400)
+  const c = await call('POST', '/tasks', admin.token, newTask({ title: 'Marketing job', category: 'Marketing', taskType: 'Embroidery' }))
+  assert.equal(c.status, 201)
+  const id = c.data.task?.id ?? c.data.id
+  const late = (delayReason) => call('PATCH', `/tasks/${id}/notes`, admin.token, { delayReason, delayRemarks: 'test' })
+  assert.equal((await late('Nonsense')).status, 400)
+  assert.equal((await late('Power cut')).status, 200)
+  // a reason hidden later can still be re-saved on a task that already has it
+  const reason = (await call('GET', '/options', admin.token)).data.options.find((o) => o.value === 'Power cut')
+  await call('PATCH', `/options/${reason.id}`, admin.token, { isActive: false })
+  assert.equal((await late('Power cut')).status, 200)
+})
+
 test('late tasks become one daily digest per person, and clicking marks it read', async () => {
   const past = new Date(Date.now() - 2 * 86400_000).toISOString()
   for (const title of ['Late one', 'Late two']) {

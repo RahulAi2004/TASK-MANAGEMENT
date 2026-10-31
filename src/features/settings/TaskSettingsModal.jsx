@@ -7,6 +7,8 @@ import {
   Info, FileText, Flag, Save, Pencil, Copy, Trash2,
 } from 'lucide-react'
 import { api } from '../../data/api'
+import OptionsManager from './OptionsManager'
+import { t as tr } from '../../i18n'
 
 const PRIORITIES = ['Urgent', 'High', 'Medium', 'Low']
 const PRIORITY_STYLE = {
@@ -92,6 +94,7 @@ function PriorityChip({ priority }) {
 
 export default function TaskSettingsModal({ open, onClose }) {
   const scrollRef = useRef(null)
+  const [tab, setTab] = useState('routines')
   const [routines, setRoutines] = useState([])
   const [departments, setDepartments] = useState([])
   const [templates, setTemplates] = useState([])
@@ -238,6 +241,23 @@ export default function TaskSettingsModal({ open, onClose }) {
           </button>
         </div>
 
+        <div className="mb-4 flex gap-1 border-b border-border" role="tablist">
+          {[['routines', 'Routine tasks'], ['options', 'Dropdown options']].map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={'focus-ring -mb-px border-b-2 px-3 py-2 text-[15px] ' + (tab === key ? 'border-accent font-semibold text-accent' : 'border-transparent text-ink-secondary hover:text-ink')}
+            >
+              {tr(label)}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'options' && <OptionsManager onClose={onClose} />}
+
+        <div className={tab === 'routines' ? '' : 'hidden'}>
         {/* Add / edit routine task */}
         <section className="rounded-card border border-border bg-surface p-5 shadow-card">
           <div className="mb-5 flex items-center gap-3">
@@ -497,6 +517,7 @@ export default function TaskSettingsModal({ open, onClose }) {
             )}
           </div>
         </section>
+        </div>
       </div>
     </div>
   )

@@ -5,7 +5,7 @@ import { X, Plus, Trash2, ChevronDown, Repeat } from 'lucide-react'
 import { api } from '../../data/api'
 import { useAuth, initials } from '../../auth/AuthContext'
 import VoiceRecorder from '../../components/VoiceRecorder'
-import { CATEGORIES } from './taskMeta'
+import OptionSelect from '../../components/OptionSelect'
 import { t as tr } from '../../i18n'
 
 function Field({ label, hint, required, children }) {
@@ -23,11 +23,6 @@ function Field({ label, hint, required, children }) {
 const inputCls =
   'focus-ring w-full rounded-control border border-border-strong bg-surface px-3 py-2.5 text-[14px] text-ink placeholder:text-ink-tertiary'
 
-const TASK_TYPES = [
-  'General', 'Background Removal', 'Mockup Creation', 'Production Artwork', 'Artwork Extraction',
-  'QA Review', 'Gangsheet Preparation', 'Follow-up', 'Bug Fix', 'Hardware', 'Access Request',
-]
-const ENTITY_TYPES = ['General', 'Artwork', 'Sales Order', 'Lead', 'System']
 const PRIORITIES = [
   { value: 'Low', tone: '#5B6474' },
   { value: 'Medium', tone: '#B98500' },
@@ -137,7 +132,7 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
       description: r.description || f.description,
       priority: r.priority,
       estimatedMinutes: String(r.normalMinutes),
-      taskType: r.template?.taskType && TASK_TYPES.includes(r.template.taskType) ? r.template.taskType : f.taskType,
+      taskType: r.template?.taskType || f.taskType,
     }))
     let items = []
     try { items = JSON.parse(r.template?.checklistJson || '[]') } catch { items = [] }
@@ -399,27 +394,21 @@ export default function CreateTaskPanel({ open, onClose, onCreated, initial }) {
               <div className="space-y-4 border-t border-border p-4">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Category">
-                    <select className={inputCls} value={form.category} onChange={set('category')}>
-                      {CATEGORIES.map((c) => <option key={c} value={c}>{tr(c)}</option>)}
-                    </select>
+                    <OptionSelect list="category" className={inputCls} value={form.category} onChange={(v) => setValue('category', v)} />
                   </Field>
                   <Field label="Type of work">
-                    <select className={inputCls} value={form.taskType} onChange={set('taskType')}>
-                      {TASK_TYPES.map((t) => <option key={t}>{t}</option>)}
-                    </select>
+                    <OptionSelect list="workType" className={inputCls} value={form.taskType} onChange={(v) => setValue('taskType', v)} />
                   </Field>
                   <Field label="Linked to">
-                    <select
+                    <OptionSelect
+                      list="linkedTo"
                       className={inputCls}
                       value={form.entityType}
-                      onChange={(e) => {
-                        const entityType = e.target.value
+                      onChange={(entityType) => {
                         // Order records default to "Order Related"; the user can still change it.
                         setForm((f) => ({ ...f, entityType, category: entityType === 'Sales Order' ? 'Order Related' : f.category }))
                       }}
-                    >
-                      {ENTITY_TYPES.map((t) => <option key={t} value={t}>{t === 'General' ? tr('Nothing specific') : tr(t)}</option>)}
-                    </select>
+                    />
                   </Field>
                   <Field label="Order / reference number">
                     <input className={inputCls} value={form.entityId} onChange={set('entityId')} placeholder={tr("e.g. SO-7819")} />
